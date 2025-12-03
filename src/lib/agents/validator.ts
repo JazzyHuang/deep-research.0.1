@@ -1,13 +1,9 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { Paper } from '@/types/paper';
 import type { Citation, CitationValidation } from '@/types/research';
 import { openAlex } from '@/lib/data-sources';
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter, MODELS } from '@/lib/models';
 
 // Crossref API for DOI validation
 const CROSSREF_API = 'https://api.crossref.org/works';
@@ -169,6 +165,7 @@ export function extractCitedClaims(
 
 /**
  * Validate that a citation supports the claim it's used for
+ * Uses Gemini 2.5 Flash-Lite for efficient batch validation
  */
 export async function validateCitationSupport(
   claim: string,
@@ -179,7 +176,7 @@ export async function validateCitationSupport(
   explanation: string;
 }> {
   const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o-mini'),
+    model: openrouter(MODELS.LIGHTWEIGHT),
     schema: z.object({
       supports: z.boolean().describe('Whether the paper likely supports this claim'),
       relevanceScore: z.number().min(0).max(10).describe('How relevant the paper is to the claim (0-10)'),

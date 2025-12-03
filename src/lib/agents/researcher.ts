@@ -1,4 +1,3 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { dataSourceAggregator, DataSourceAggregator } from '@/lib/data-sources';
@@ -7,10 +6,7 @@ import { contentExtractor, formatPapersForContext } from '@/lib/content-extracto
 import type { Paper, DataSourceName } from '@/types/paper';
 import { DataAvailability, getDataAvailabilityLabel } from '@/types/paper';
 import type { SearchQuery, SearchRound } from '@/types/research';
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter, MODELS, withGrokFallback } from '@/lib/models';
 
 const PaperRelevanceSchema = z.object({
   paperId: z.string(),
@@ -120,6 +116,7 @@ export async function executeSearchRound(
 
 /**
  * Analyze papers for relevance to the research question
+ * Uses Gemini 2.5 Flash-Lite for efficient batch processing
  */
 async function analyzePapers(
   papers: Paper[],
@@ -136,7 +133,7 @@ async function analyzePapers(
   }));
 
   const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o-mini'),
+    model: openrouter(MODELS.LIGHTWEIGHT),
     schema: SearchAnalysisSchema,
     prompt: `You are an expert academic researcher analyzing search results.
 
@@ -188,6 +185,7 @@ Only include papers with relevance score >= 5 in your analysis.`,
 
 /**
  * Determine if more search rounds are needed
+ * Uses Grok 4.1 Fast for search coordination decisions
  */
 export async function shouldContinueSearching(
   completedRounds: SearchRound[],
@@ -204,15 +202,17 @@ export async function shouldContinueSearching(
   }
 
   if (totalRelevantPapers < 3 && completedRounds.length < 3) {
-    // Need more papers, generate a new query
-    const { object } = await generateObject({
-      model: openrouter('openai/gpt-4o-mini'),
-      schema: z.object({
-        shouldContinue: z.boolean(),
-        reason: z.string(),
-        nextQuery: z.string().optional(),
-      }),
-      prompt: `You are deciding whether to continue searching for academic papers.
+    // Need more papers, use Grok to generate a new query
+    const result = await withGrokFallback(
+      async (modelId) => {
+        const { object } = await generateObject({
+          model: openrouter(modelId),
+          schema: z.object({
+            shouldContinue: z.boolean(),
+            reason: z.string(),
+            nextQuery: z.string().optional(),
+          }),
+          prompt: `You are deciding whether to continue searching for academic papers.
 
 RESEARCH QUESTION: ${researchQuestion}
 
@@ -222,9 +222,14 @@ ${completedRounds.map(r => `- "${r.query}" → ${r.papers.length} papers`).join(
 TOTAL RELEVANT PAPERS: ${totalRelevantPapers}
 
 Should we continue searching? If yes, suggest a different search approach.`,
-    });
+        });
+        return object;
+      },
+      'Researcher',
+      'shouldContinueSearching'
+    );
 
-    return object;
+    return result;
   }
 
   return { shouldContinue: false, reason: 'Adequate coverage achieved' };

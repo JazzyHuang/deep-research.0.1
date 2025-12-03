@@ -50,23 +50,36 @@ Five professional citation styles:
 | **Framework** | Next.js 16 (App Router) + React 19 |
 | **Language** | TypeScript |
 | **Styling** | Tailwind CSS v4 + shadcn/ui |
-| **AI** | Vercel AI SDK + OpenRouter (GPT-4o, GPT-4o-mini) |
+| **AI** | Vercel AI SDK + OpenRouter (Grok 4.1 Fast, Gemini 2.5 Flash, Gemini 2.5 Flash-Lite) |
 | **Database** | Supabase (PostgreSQL + Auth + Row Level Security) |
 | **APIs** | CORE API, Semantic Scholar, OpenAlex, arXiv, PubMed, Crossref |
+
+### AI Model Strategy
+
+| Model | Role | Key Capabilities |
+|-------|------|------------------|
+| **Grok 4.1 Fast** | Orchestration & Planning | 2M context window, fast reasoning, tool calling |
+| **Gemini 2.5 Flash** | Writing & Analysis | Deep thinking mode, strong reasoning |
+| **Gemini 2.5 Flash-Lite** | Bulk Tasks | Fastest, cost-efficient, high throughput |
+
+- **Grok 4.1 Fast**: Powers research planning, workflow decisions, and search coordination. Features automatic fallback from free to paid tier.
+- **Gemini 2.5 Flash**: Handles report generation and critical analysis with thinking mode enabled for deeper reasoning.
+- **Gemini 2.5 Flash-Lite**: Processes paper extraction, citation validation, and other repetitive tasks efficiently.
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Coordinator                               │
-│        (Dynamic Workflow Orchestration & Decision Making)        │
+│        (Grok 4.1 Fast - Workflow Orchestration)                  │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
 │    Planner    │   │  Researcher   │   │    Writer     │
-│               │   │               │   │               │
+│  (Grok 4.1)   │   │ (Mixed)       │   │ (Gemini 2.5   │
+│               │   │               │   │  Flash+Think) │
 │ • Parse query │   │ • Multi-round │   │ • Generate    │
 │ • Sub-questions│   │   search      │   │   report      │
 │ • Search      │   │ • Gap analysis│   │ • Citations   │
@@ -77,17 +90,18 @@ Five professional citation styles:
         ▼                                       ▼
 ┌───────────────┐                       ┌───────────────┐
 │    Critic     │◄─────────────────────►│ Quality Gate  │
-│               │                       │               │
-│ • Review      │                       │ • Metrics     │
-│ • Score       │                       │ • Pass/Fail   │
-│ • Hallucinate │                       │ • Iterate     │
-│   detection   │                       │   decision    │
+│ (Gemini 2.5   │                       │               │
+│  Flash+Think) │                       │ • Metrics     │
+│ • Review      │                       │ • Pass/Fail   │
+│ • Score       │                       │ • Iterate     │
+│ • Hallucinate │                       │   decision    │
+│   detection   │                       │               │
 └───────────────┘                       └───────────────┘
         │
         ▼
 ┌───────────────┐
 │   Validator   │
-│               │
+│ (Flash-Lite)  │
 │ • DOI verify  │
 │ • Citation    │
 │   support     │

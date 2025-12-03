@@ -1,11 +1,7 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { ResearchPlan, SearchQuery } from '@/types/research';
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter, MODELS, withGrokFallback } from '@/lib/models';
 
 const ResearchPlanSchema = z.object({
   mainQuestion: z.string().describe('The core research question being investigated'),
@@ -23,13 +19,19 @@ const ResearchPlanSchema = z.object({
   expectedSections: z.array(z.string()).describe('Expected sections in the final report'),
 });
 
+/**
+ * Create a comprehensive research plan using Grok 4.1 Fast
+ * Leverages Grok's 2M context window for strategic planning
+ */
 export async function createResearchPlan(userQuery: string): Promise<ResearchPlan> {
   const currentYear = new Date().getFullYear();
   
-  const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o'),
-    schema: ResearchPlanSchema,
-    prompt: `You are an expert academic research planner. Given a research question, create a comprehensive research plan.
+  const result = await withGrokFallback(
+    async (modelId) => {
+      const { object } = await generateObject({
+        model: openrouter(modelId),
+        schema: ResearchPlanSchema,
+        prompt: `You are an expert academic research planner. Given a research question, create a comprehensive research plan.
 
 USER'S RESEARCH QUESTION:
 ${userQuery}
@@ -51,23 +53,32 @@ For the report structure:
 - Include Introduction, Literature Review sections
 - Add topic-specific sections
 - Include Discussion/Analysis and Conclusion`,
-  });
+      });
+      return object;
+    },
+    'Planner',
+    'createResearchPlan'
+  );
 
   return {
-    mainQuestion: object.mainQuestion,
-    subQuestions: object.subQuestions,
-    searchStrategies: object.searchStrategies as SearchQuery[],
-    expectedSections: object.expectedSections,
+    mainQuestion: result.mainQuestion,
+    subQuestions: result.subQuestions,
+    searchStrategies: result.searchStrategies as SearchQuery[],
+    expectedSections: result.expectedSections,
   };
 }
 
+/**
+ * Refine a search query based on previous results
+ * Uses Gemini 2.5 Flash-Lite for efficient query refinement
+ */
 export async function refineSearchQuery(
   originalQuery: string,
   previousResults: { found: number; relevant: number },
   context: string
 ): Promise<SearchQuery> {
   const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o-mini'),
+    model: openrouter(MODELS.LIGHTWEIGHT),
     schema: z.object({
       query: z.string(),
       reasoning: z.string(),

@@ -1,4 +1,3 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { Paper } from '@/types/paper';
@@ -31,6 +30,7 @@ import {
 } from '@/lib/context';
 import { ResearchMemory } from '@/lib/context/memory';
 import { dataSourceAggregator } from '@/lib/data-sources';
+import { openrouter, withGrokFallback } from '@/lib/models';
 
 // Helper to generate unique step IDs
 let stepCounter = 0;
@@ -52,10 +52,6 @@ function createLog(
     data,
   };
 }
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
 
 export interface CoordinatorConfig {
   maxSearchRounds: number;
@@ -927,6 +923,7 @@ export async function* coordinateResearch(
 
 /**
  * Make a dynamic workflow decision based on current state and metrics
+ * Uses Grok 4.1 Fast for intelligent workflow orchestration
  */
 export async function decideNextStep(
   currentState: WorkflowState,
@@ -935,18 +932,20 @@ export async function decideNextStep(
   iteration: number,
   maxIterations: number,
 ): Promise<WorkflowDecision> {
-  // Use AI to make complex decisions
-  const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o-mini'),
-    schema: z.object({
-      nextState: z.enum([
-        'searching', 'analyzing', 'writing', 'reviewing', 'iterating', 'complete'
-      ]),
-      reason: z.string(),
-      additionalTasks: z.array(z.string()).optional(),
-      feedback: z.string().optional(),
-    }),
-    prompt: `You are coordinating a research workflow. Decide the next step.
+  // Use Grok 4.1 Fast with fallback for workflow orchestration
+  const result = await withGrokFallback(
+    async (modelId) => {
+      const { object } = await generateObject({
+        model: openrouter(modelId),
+        schema: z.object({
+          nextState: z.enum([
+            'searching', 'analyzing', 'writing', 'reviewing', 'iterating', 'complete'
+          ]),
+          reason: z.string(),
+          additionalTasks: z.array(z.string()).optional(),
+          feedback: z.string().optional(),
+        }),
+        prompt: `You are coordinating a research workflow. Decide the next step.
 
 CURRENT STATE: ${currentState}
 ITERATION: ${iteration}/${maxIterations}
@@ -967,13 +966,18 @@ Decide:
 1. Should we continue iterating or mark as complete?
 2. What specific improvements are needed?
 3. Should we search for more papers first?`,
-  });
+      });
+      return object;
+    },
+    'Coordinator',
+    'decideNextStep'
+  );
 
   return {
-    nextState: object.nextState as WorkflowState,
-    reason: object.reason,
-    additionalTasks: object.additionalTasks,
-    feedback: object.feedback,
+    nextState: result.nextState as WorkflowState,
+    reason: result.reason,
+    additionalTasks: result.additionalTasks,
+    feedback: result.feedback,
   };
 }
 

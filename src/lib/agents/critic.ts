@@ -1,4 +1,3 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { Paper } from '@/types/paper';
@@ -7,10 +6,7 @@ import type {
   CriticAnalysis,
   HallucinationFlag,
 } from '@/types/research';
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter, MODELS, getModelConfig, THINKING_BUDGETS } from '@/lib/models';
 
 // Zod schemas for structured output
 const HallucinationFlagSchema = z.object({
@@ -45,6 +41,7 @@ export interface CriticContext {
 
 /**
  * Critic Agent: Analyzes research reports for quality, coverage, and potential issues
+ * Uses Gemini 2.5 Flash with thinking mode for deep critical analysis
  */
 export async function analyzeReport(context: CriticContext): Promise<CriticAnalysis> {
   const { plan, papers, reportContent, citations, iteration } = context;
@@ -60,8 +57,11 @@ export async function analyzeReport(context: CriticContext): Promise<CriticAnaly
 
   const citationList = citations.map(c => `${c.id}: "${c.title}"`).join('\n');
 
+  // Use thinking mode for thorough analysis and hallucination detection
+  const thinkingOptions = getModelConfig(MODELS.WRITER, true, THINKING_BUDGETS.DEEP);
   const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o'),
+    model: openrouter(MODELS.WRITER),
+    ...thinkingOptions,
     schema: CriticAnalysisSchema,
     prompt: `You are an expert academic reviewer and critic. Analyze the following research report for quality, accuracy, and completeness.
 
@@ -118,6 +118,7 @@ ${iteration >= 3 ? 'NOTE: This is already iteration 3+. Be more lenient on shoul
 
 /**
  * Quick hallucination check for a specific claim
+ * Uses Gemini 2.5 Flash-Lite for efficient batch claim checking
  */
 export async function checkClaim(
   claim: string,
@@ -130,7 +131,7 @@ export async function checkClaim(
   }));
 
   const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o-mini'),
+    model: openrouter(MODELS.LIGHTWEIGHT),
     schema: z.object({
       isSupported: z.boolean().describe('Whether the claim is supported by the papers'),
       confidence: z.number().min(0).max(100).describe('Confidence in this assessment'),
@@ -155,6 +156,7 @@ Is this claim supported by these papers? Consider:
 
 /**
  * Generate improvement suggestions based on critic analysis
+ * Uses Gemini 2.5 Flash-Lite for efficient improvement planning
  */
 export async function generateImprovementPlan(
   analysis: CriticAnalysis,
@@ -165,7 +167,7 @@ export async function generateImprovementPlan(
   sectionsToRevise: string[];
 }> {
   const { object } = await generateObject({
-    model: openrouter('openai/gpt-4o-mini'),
+    model: openrouter(MODELS.LIGHTWEIGHT),
     schema: z.object({
       prioritizedImprovements: z.array(z.string()).describe('Ordered list of improvements to make'),
       additionalSearchQueries: z.array(z.string()).describe('New search queries to find missing information'),

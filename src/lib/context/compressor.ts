@@ -1,11 +1,7 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { Paper } from '@/types/paper';
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter, MODELS } from '@/lib/models';
 
 export interface CompressedPaper {
   id: string;
@@ -53,6 +49,7 @@ export function estimateTokens(text: string): number {
 
 /**
  * Compress a single paper's information
+ * Uses Gemini 2.5 Flash-Lite for efficient batch extraction
  */
 export async function compressPaper(
   paper: Paper,
@@ -75,7 +72,7 @@ export async function compressPaper(
 
   try {
     const { object } = await generateObject({
-      model: openrouter('openai/gpt-4o-mini'),
+      model: openrouter(MODELS.LIGHTWEIGHT),
       schema: z.object({
         keyFindings: z.array(z.string()).max(3).describe('Key findings or contributions (max 3)'),
         methodology: z.string().optional().describe('Brief methodology summary if applicable'),

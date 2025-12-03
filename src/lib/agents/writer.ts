@@ -1,4 +1,3 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { streamText } from 'ai';
 import type { Paper } from '@/types/paper';
 import type { Citation, ResearchPlan, ResearchReport, ReportSection, SearchRound } from '@/types/research';
@@ -12,10 +11,7 @@ import {
   CITATION_STYLES,
   formatAuthorsInText,
 } from '@/lib/citation';
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter, MODELS, getModelConfig, THINKING_BUDGETS } from '@/lib/models';
 
 interface WriterContext {
   plan: ResearchPlan;
@@ -105,9 +101,12 @@ ${p.journal ? `Journal: ${p.journal}` : ''}
   const reportSections: ReportSection[] = [];
   let fullContent = '';
 
-  // Stream the main content
+  // Stream the main content using Gemini 2.5 Flash with thinking mode
+  // for deep synthesis and high-quality academic writing
+  const thinkingOptions = getModelConfig(MODELS.WRITER, true, THINKING_BUDGETS.DEEP);
   const { textStream } = streamText({
-    model: openrouter('openai/gpt-4o'),
+    model: openrouter(MODELS.WRITER),
+    ...thinkingOptions,
     system: `You are an expert academic writer creating a comprehensive research report.
 
 ${citationInstructions}
@@ -338,13 +337,14 @@ export function generateReferenceList(citations: Citation[], style: CitationStyl
 
 /**
  * Generate a brief summary for a specific section
+ * Uses Gemini 2.5 Flash-Lite for efficient summary generation
  */
 export async function generateSectionSummary(
   sectionContent: string,
   maxLength: number = 200
 ): Promise<string> {
   const { textStream } = streamText({
-    model: openrouter('openai/gpt-4o-mini'),
+    model: openrouter(MODELS.LIGHTWEIGHT),
     prompt: `Summarize this section in ${maxLength} characters or less:\n\n${sectionContent}`,
   });
 
