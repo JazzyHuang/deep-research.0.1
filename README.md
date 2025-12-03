@@ -1,163 +1,324 @@
 # Deep Research
 
-AI-powered academic research platform that generates comprehensive reports with real citations from peer-reviewed papers.
+AI-powered academic research platform that generates comprehensive research reports with verified citations from peer-reviewed papers.
 
-## Features
+## ✨ Features
 
-- **Multi-Agent Research System**: Three specialized AI agents (Planner, Researcher, Writer) work together to conduct deep research
-- **CORE Database Integration**: Access to 200M+ open access academic papers
-- **Real-time Streaming**: Watch as your research unfolds with live updates
-- **Authentic Citations**: Every claim is backed by real, verifiable papers
-- **User Authentication**: Save and manage your research history
-- **Export Options**: Download reports in Markdown format
+### 🤖 Advanced Multi-Agent System
+- **Coordinator** - Dynamic workflow orchestrator with intelligent decision-making
+- **Planner** - Analyzes research questions and generates strategic search plans
+- **Researcher** - Executes multi-round literature searches across multiple databases
+- **Writer** - Synthesizes findings into comprehensive reports with inline citations
+- **Critic** - Reviews reports for quality, coverage, and potential hallucinations
+- **Quality Gate** - Evaluates metrics and triggers iterative improvements
+- **Validator** - Verifies citation accuracy and DOI authenticity via Crossref
 
-## Tech Stack
+### 📚 Multi-Source Academic Database Integration
+- **CORE** - 200M+ open access papers
+- **Semantic Scholar** - AI-powered academic search
+- **OpenAlex** - Open catalog of scholarly works
+- **arXiv** - Physics, mathematics, and computer science preprints
+- **PubMed** - Biomedical and life sciences literature
 
-- **Framework**: Next.js 15 (App Router) + TypeScript
-- **UI**: Tailwind CSS v4 + Shadcn/UI
-- **AI**: Vercel AI SDK + OpenRouter (GPT-4o)
-- **Database**: Supabase (PostgreSQL + Auth + RLS)
-- **Papers API**: CORE API v3
+Features intelligent aggregation with deduplication, retry logic, and fallback support.
 
-## Getting Started
+### 📝 Comprehensive Citation System
+Five professional citation styles:
+- **APA** (American Psychological Association)
+- **MLA** (Modern Language Association)
+- **Chicago** (Chicago Manual of Style)
+- **IEEE** (Institute of Electrical and Electronics Engineers)
+- **GB/T 7714** (Chinese national standard)
+
+### 🔄 Quality Control Pipeline
+- Multi-iteration report refinement (up to 3 iterations by default)
+- Quality metrics: coverage score, citation density, recency score
+- Hallucination detection and flagging
+- Citation validation with DOI verification
+- Gap analysis with automatic search suggestions
+
+### 🎯 Real-Time Research Experience
+- Server-Sent Events (SSE) for live streaming updates
+- Agent execution timeline visualization
+- Step-by-step progress tracking
+- Interactive research session management
+
+## 🛠️ Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| **Framework** | Next.js 16 (App Router) + React 19 |
+| **Language** | TypeScript |
+| **Styling** | Tailwind CSS v4 + shadcn/ui |
+| **AI** | Vercel AI SDK + OpenRouter (GPT-4o, GPT-4o-mini) |
+| **Database** | Supabase (PostgreSQL + Auth + Row Level Security) |
+| **APIs** | CORE API, Semantic Scholar, OpenAlex, arXiv, PubMed, Crossref |
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Coordinator                               │
+│        (Dynamic Workflow Orchestration & Decision Making)        │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│    Planner    │   │  Researcher   │   │    Writer     │
+│               │   │               │   │               │
+│ • Parse query │   │ • Multi-round │   │ • Generate    │
+│ • Sub-questions│   │   search      │   │   report      │
+│ • Search      │   │ • Gap analysis│   │ • Citations   │
+│   strategies  │   │ • Enrichment  │   │ • Sections    │
+└───────────────┘   └───────────────┘   └───────────────┘
+                            │
+        ┌───────────────────┴───────────────────┐
+        ▼                                       ▼
+┌───────────────┐                       ┌───────────────┐
+│    Critic     │◄─────────────────────►│ Quality Gate  │
+│               │                       │               │
+│ • Review      │                       │ • Metrics     │
+│ • Score       │                       │ • Pass/Fail   │
+│ • Hallucinate │                       │ • Iterate     │
+│   detection   │                       │   decision    │
+└───────────────┘                       └───────────────┘
+        │
+        ▼
+┌───────────────┐
+│   Validator   │
+│               │
+│ • DOI verify  │
+│ • Citation    │
+│   support     │
+└───────────────┘
+```
+
+### Data Source Aggregation
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              DataSourceAggregator                        │
+│  ┌─────────┬─────────┬─────────┬─────────┬─────────┐   │
+│  │  CORE   │Semantic │OpenAlex │  arXiv  │ PubMed  │   │
+│  │         │Scholar  │         │         │         │   │
+│  └────┬────┴────┬────┴────┬────┴────┬────┴────┬────┘   │
+│       │         │         │         │         │        │
+│       └─────────┴─────────┴─────────┴─────────┘        │
+│                         │                               │
+│                    Deduplicate                          │
+│                    Sort & Filter                        │
+│                    Retry & Fallback                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 📁 Project Structure
+
+```
+src/
+├── app/
+│   ├── (auth)/                    # Authentication pages
+│   │   ├── login/
+│   │   └── register/
+│   ├── (dashboard)/               # Protected dashboard
+│   │   ├── dashboard/
+│   │   ├── history/
+│   │   └── report/[id]/
+│   ├── api/
+│   │   ├── core/route.ts          # CORE API proxy
+│   │   └── research/              # Research API endpoints
+│   │       ├── route.ts           # Main research streaming API
+│   │       └── sessions/          # Session management
+│   ├── research/[sessionId]/      # Research session page
+│   ├── page.tsx                   # Home page
+│   └── globals.css
+├── components/
+│   ├── cards/                     # Card components
+│   ├── execution/                 # Agent execution visualization
+│   ├── history-sidebar/           # Research history
+│   ├── layout/                    # Layout components
+│   ├── providers/                 # Context providers
+│   ├── research/                  # Research UI components
+│   ├── research-chat/             # Chat interface components
+│   ├── sidebar/                   # Side panel components
+│   └── ui/                        # shadcn/ui components
+├── hooks/
+│   └── useResearchSession.ts      # Research session hook
+├── lib/
+│   ├── agents/                    # AI Agent implementations
+│   │   ├── coordinator.ts         # Main workflow coordinator
+│   │   ├── planner.ts             # Research planning
+│   │   ├── researcher.ts          # Literature search
+│   │   ├── writer.ts              # Report generation
+│   │   ├── critic.ts              # Quality review
+│   │   ├── quality-gate.ts        # Quality evaluation
+│   │   └── validator.ts           # Citation validation
+│   ├── citation/                  # Citation formatting system
+│   │   ├── formatter.ts           # Main formatter
+│   │   └── styles/                # Style implementations
+│   │       ├── apa.ts
+│   │       ├── mla.ts
+│   │       ├── chicago.ts
+│   │       ├── ieee.ts
+│   │       └── gbt7714.ts
+│   ├── context/                   # Context management
+│   │   ├── compressor.ts          # Token compression
+│   │   └── memory.ts              # Research memory
+│   ├── data-sources/              # Academic database clients
+│   │   ├── index.ts               # Aggregator
+│   │   ├── core.ts
+│   │   ├── semantic-scholar.ts
+│   │   ├── openalex.ts
+│   │   ├── arxiv.ts
+│   │   └── pubmed.ts
+│   ├── supabase/                  # Supabase clients
+│   └── utils.ts
+├── types/                         # TypeScript definitions
+│   ├── paper.ts                   # Paper & citation types
+│   ├── research.ts                # Research session types
+│   ├── agent.ts                   # Agent state types
+│   └── conversation.ts            # Chat types
+└── middleware.ts                  # Auth middleware
+```
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- npm or pnpm
-- Supabase account
+- npm, yarn, or pnpm
+- Supabase account (optional, for persistence)
 - OpenRouter API key
-- CORE API key
+- CORE API key (optional but recommended)
 
 ### Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
 ```bash
-git clone <your-repo-url>
-cd deepresearch.0.1
+git clone https://github.com/JazzyHuang/deep-research.0.1.git
+cd deep-research.0.1
 ```
 
-2. Install dependencies:
+2. **Install dependencies:**
 ```bash
 npm install
 ```
 
-3. Set up environment variables:
+3. **Set up environment variables:**
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local` with your credentials:
+Edit `.env.local`:
 ```env
+# Required
 OPENROUTER_API_KEY=your_openrouter_key
+
+# Optional - Academic APIs (enhances search coverage)
 CORE_API_KEY=your_core_api_key
+SEMANTIC_SCHOLAR_API_KEY=your_s2_api_key
+
+# Optional - Supabase (for user auth & persistence)
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_key
 ```
 
-4. Set up the database:
+4. **Set up the database (optional):**
 
 Run the migration in your Supabase SQL editor:
 ```sql
 -- Copy contents from supabase/migrations/001_initial_schema.sql
 ```
 
-5. Start the development server:
+5. **Start the development server:**
 ```bash
 npm run dev
 ```
 
-6. Open [http://localhost:3000](http://localhost:3000)
+6. **Open [http://localhost:3000](http://localhost:3000)**
 
-## API Keys
+## 🔑 API Keys
 
-### OpenRouter
-Get your API key from [OpenRouter](https://openrouter.ai/keys)
+| Service | Description | Link |
+|---------|-------------|------|
+| **OpenRouter** | AI model access (required) | [Get API Key](https://openrouter.ai/keys) |
+| **CORE API** | 200M+ academic papers | [Register](https://core.ac.uk/services/api) |
+| **Semantic Scholar** | AI-powered paper search | [Get API Key](https://www.semanticscholar.org/product/api) |
 
-### CORE API
-Register for a free API key at [CORE](https://core.ac.uk/services/api)
+> **Note:** The system works without CORE/Semantic Scholar keys using free tier APIs (OpenAlex, arXiv, PubMed), but API keys provide better rate limits and coverage.
 
-### Supabase
-Create a project at [Supabase](https://supabase.com) and get your keys from Project Settings > API
+## 📖 Usage
 
-## Architecture
+1. **Enter your research question** - Be specific about what you want to investigate
 
-```
-┌─────────────────────────────────────────┐
-│  Deep Research Agent (Multi-Agent)      │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
-│  │ Planner │→│Researcher│→│ Writer  │ │
-│  │ Agent   │  │ Agent   │  │ Agent   │ │
-│  └─────────┘  └─────────┘  └─────────┘ │
-│       ↓            ↓            ↓      │
-│  Parse query   Multi-round   Generate  │
-│  & plan        CORE search   report    │
-└─────────────────────────────────────────┘
-```
+2. **Select citation style** - Choose from APA, MLA, Chicago, IEEE, or GB/T 7714
 
-### Planner Agent
-- Analyzes the research question
-- Generates search strategies
-- Plans report structure
+3. **Watch the research unfold** - See real-time progress:
+   - Planning phase: Query analysis and strategy generation
+   - Search phase: Multi-round literature search across databases
+   - Analysis phase: Paper prioritization and context compression
+   - Writing phase: Report generation with inline citations
+   - Review phase: Quality evaluation and iterative improvement
+   - Validation phase: Citation verification
 
-### Researcher Agent
-- Executes multi-round searches on CORE
-- Analyzes paper relevance
-- Identifies literature gaps
-- Decides when enough data is collected
+4. **Review the report** - Read through the generated report with verified citations
 
-### Writer Agent
-- Synthesizes findings
-- Generates comprehensive report
-- Inserts proper citations
-- Creates reference list
+5. **Verify sources** - Click on any citation to view the original paper
 
-## Project Structure
+6. **Export or save** - Download as Markdown or save to your history
 
-```
-/src
-  /app
-    /api
-      /research/route.ts    # Main research API
-      /core/route.ts        # CORE API proxy
-    /(auth)
-      /login/page.tsx
-      /register/page.tsx
-    /(dashboard)
-      /dashboard/page.tsx   # Main research interface
-      /history/page.tsx     # Research history
-      /report/[id]/page.tsx # Report detail
-  /components
-    /research               # Research-specific components
-    /ui                     # Shadcn components
-    /layout                 # Layout components
-  /lib
-    /agents                 # AI agent implementations
-    /supabase              # Supabase clients
-    core-api.ts            # CORE API client
-  /types                    # TypeScript types
+## ⚙️ Configuration
+
+The research API accepts configuration options:
+
+```typescript
+{
+  maxSearchRounds: 5,          // Maximum search iterations
+  maxIterations: 3,            // Maximum report revision iterations
+  minPapersRequired: 8,        // Minimum papers before writing
+  enableMultiSource: true,     // Use multiple academic databases
+  enableCitationValidation: true,  // Validate citations via Crossref
+  enableContextCompression: true,  // Compress paper context for efficiency
+  citationStyle: 'ieee',       // 'apa' | 'mla' | 'chicago' | 'ieee' | 'gbt7714'
+  qualityGate: {
+    minOverallScore: 70,       // Minimum quality score to pass
+    maxIterations: 3,          // Max iterations before force-pass
+  }
+}
 ```
 
-## Usage
+## 🧪 Quality Metrics
 
-1. **Enter your research question** - Be specific about what you want to learn
-2. **Watch the research unfold** - See real-time updates as the AI searches and analyzes papers
-3. **Review the report** - Read through the generated report with citations
-4. **Verify sources** - Click on any citation to view the original paper
-5. **Export or save** - Download as Markdown or save to your history
+The system evaluates reports on:
 
-## Contributing
+| Metric | Description |
+|--------|-------------|
+| **Coverage Score** | How well sub-questions are addressed (0-100) |
+| **Citation Density** | Citations per 500 words |
+| **Unique Sources** | Number of distinct papers cited |
+| **Recency Score** | How recent the cited sources are (0-100) |
+| **Coherence Score** | Logical flow and structure quality (0-100) |
+| **Depth Score** | Analysis depth beyond summarization (0-100) |
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## 📄 License
 
-## License
+MIT License - see [LICENSE](LICENSE) file for details.
 
-MIT License - see LICENSE file for details
+## 🙏 Acknowledgments
 
-## Acknowledgments
+- [CORE](https://core.ac.uk/) - Open access academic papers
+- [Semantic Scholar](https://www.semanticscholar.org/) - AI-powered research tools
+- [OpenAlex](https://openalex.org/) - Open catalog of scholarly works
+- [arXiv](https://arxiv.org/) - Open access archive
+- [PubMed](https://pubmed.ncbi.nlm.nih.gov/) - Biomedical literature
+- [OpenRouter](https://openrouter.ai/) - AI model access
+- [Vercel](https://vercel.com/) - AI SDK and hosting
+- [Supabase](https://supabase.com/) - Backend services
+- [Crossref](https://www.crossref.org/) - DOI verification
 
-- [CORE](https://core.ac.uk/) for providing access to academic papers
-- [OpenRouter](https://openrouter.ai/) for AI model access
-- [Vercel](https://vercel.com/) for the AI SDK
-- [Supabase](https://supabase.com/) for backend services
+---
+
+<p align="center">
+  Built with ❤️ for researchers everywhere
+</p>
