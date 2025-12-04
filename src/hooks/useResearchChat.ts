@@ -474,6 +474,54 @@ export function useResearchChat({
             });
           }
         }
+
+        // Handle agent logs
+        if (part.type === 'data-agent-log') {
+          const logPart = part as { type: 'data-agent-log'; id?: string; data: { eventId?: string; log: any } };
+          const logData = logPart.data;
+          
+          // Strategy: Attach log to the most recent running event if exact ID match fails
+          // This ensures logs are always shown even if IDs don't perfectly align
+          
+          let targetEventId: string | undefined = logData.eventId;
+          
+          // If exact ID not found, attach to currently running or last event
+          if (!targetEventId || !eventsMap.has(targetEventId)) {
+            // Find the currently running event (SOTA)
+            // We assume logs belong to the active stage/event
+            const runningEvent = Array.from(eventsMap.values()).reverse().find(e => e.status === 'running');
+            
+            if (runningEvent) {
+              targetEventId = runningEvent.id;
+            } else {
+              // If no running event, attach to the last event
+              const lastEvent = Array.from(eventsMap.values()).pop();
+              if (lastEvent) {
+                targetEventId = lastEvent.id;
+              }
+            }
+          }
+          
+          if (targetEventId) {
+            const existingEvent = eventsMap.get(targetEventId);
+            if (existingEvent) {
+              // Create a new logs array if needed
+              const currentLogs = existingEvent.logs || [];
+              
+              // Check if log already exists (deduplication based on timestamp + text)
+              const logExists = currentLogs.some(l => 
+                l.timestamp === logData.log.timestamp && l.text === logData.log.text
+              );
+              
+              if (!logExists) {
+                eventsMap.set(targetEventId, {
+                  ...existingEvent,
+                  logs: [...currentLogs, logData.log]
+                });
+              }
+            }
+          }
+        }
       }
     }
     

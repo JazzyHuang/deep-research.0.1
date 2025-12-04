@@ -275,9 +275,9 @@ Begin writing the report now:`;
       timeSinceLastChunk: Date.now() - lastYieldTime,
     });
     
-    // SOTA: Lowered threshold from 2000 to 1000 chars for better partial content recovery
-    // A report with 1000+ chars likely has useful content (title + abstract at minimum)
-    const hasSubstantialContent = fullContent.length > 1000;
+    // SOTA: Lowered threshold from 2000 to 500 chars for better partial content recovery
+    // A report with 500+ chars likely has useful content (title + abstract at minimum)
+    const hasSubstantialContent = fullContent.length > 500;
     
     // SOTA: Check for ERR_INCOMPLETE_CHUNKED_ENCODING specifically
     const isChunkedEncodingError = lowerMsg.includes('incomplete') || 
@@ -296,7 +296,7 @@ Begin writing the report now:`;
         // Don't throw - let the partial content be used
       } else {
         userFriendlyMessage = isChunkedEncodingError
-          ? '数据流传输中断，请刷新页面重试'
+          ? '数据流传输中断（网络不稳定），请刷新页面重试'
           : '报告生成被中断（可能是超时），请重试或简化研究问题';
         throw new Error(userFriendlyMessage);
       }
@@ -305,7 +305,7 @@ Begin writing the report now:`;
         ? '网络连接中断，已保存部分内容'
         : (usedFallbackModel 
           ? '网络连接中断，备用模型也无法完成报告生成'
-          : '网络连接中断，报告生成失败');
+          : '网络连接中断，报告生成失败，请检查网络连接');
       if (!hasSubstantialContent) {
         throw new Error(userFriendlyMessage);
       }

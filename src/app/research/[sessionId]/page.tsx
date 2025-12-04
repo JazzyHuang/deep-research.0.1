@@ -75,6 +75,7 @@ function ResearchSessionContent() {
     currentCheckpoint,
     cards,
     agentSteps,
+    agentEvents,
     sendMessage,
     stopResearch,
     respondToCheckpoint,
@@ -350,6 +351,7 @@ function ResearchSessionContent() {
                     messages={uniqueMessages}
                     cards={cards}
                     currentCheckpoint={currentCheckpoint}
+                    agentEvents={agentEvents}
                     onCardClick={handleCardClick}
                     onCheckpointAction={handleCheckpointAction}
                   />

@@ -142,6 +142,7 @@ export interface AgentEventData {
   startTime: number;
   endTime?: number;
   duration?: number;
+  logs?: LogLineData[];
 }
 
 /**
@@ -260,6 +261,7 @@ export interface ResearchDataParts {
   'agent-event': AgentEventData;
   'agent-event-update': AgentEventUpdateData;
   'agent-event-complete': AgentEventCompleteData;
+  'agent-log': { eventId?: string; log: LogLineData };
   
   // UI elements
   'log-line': LogLineData;

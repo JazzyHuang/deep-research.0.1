@@ -188,9 +188,9 @@ function getStatusIcon(status: StatusType) {
 // ============================================================================
 
 function EventItem({ event, isLast, locale }: EventItemProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const metaSummary = formatMetaSummary(event.meta, locale);
-  const hasDetails = !!event.meta?.query || !!event.meta?.sourceBreakdown;
+  const hasDetails = !!event.meta?.query || !!event.meta?.sourceBreakdown || (event.logs && event.logs.length > 0);
   
   // Format iteration display
   const iterationText = event.iteration !== undefined
@@ -285,15 +285,15 @@ function EventItem({ event, isLast, locale }: EventItemProps) {
         )}
         
         {/* Expanded details */}
-        {isExpanded && event.meta && (
+        {isExpanded && (
           <div className="mt-2 ml-1 space-y-1.5 text-xs text-muted-foreground/70 border-l-2 border-border/50 pl-2">
-            {event.meta.query && (
+            {event.meta && event.meta.query && (
               <div>
                 <span className="text-muted-foreground/50">Query: </span>
                 <span className="font-mono">{event.meta.query}</span>
               </div>
             )}
-            {event.meta.sourceBreakdown && Object.keys(event.meta.sourceBreakdown).length > 0 && (
+            {event.meta && event.meta.sourceBreakdown && Object.keys(event.meta.sourceBreakdown).length > 0 && (
               <div>
                 <span className="text-muted-foreground/50">Sources: </span>
                 {Object.entries(event.meta.sourceBreakdown).map(([source, count]) => (
@@ -303,13 +303,33 @@ function EventItem({ event, isLast, locale }: EventItemProps) {
                 ))}
               </div>
             )}
-            {event.meta.gapsFound !== undefined && event.meta.gapsFound > 0 && (
+            {event.meta && event.meta.gapsFound !== undefined && event.meta.gapsFound > 0 && (
               <div>
                 <span className="text-muted-foreground/50">
                   {locale === 'zh' ? '发现缺口: ' : 'Gaps found: '}
                 </span>
                 {event.meta.gapsFound}
               </div>
+            )}
+            
+            {/* Logs */}
+            {event.logs && event.logs.length > 0 && (
+               <div className="mt-2 pt-2 border-t border-border/30">
+                 {event.logs.map((log, i) => (
+                   <div key={i} className="flex gap-2 mb-1 font-mono text-[10px] opacity-80 animate-in fade-in duration-300">
+                     <span className="text-muted-foreground/40 shrink-0 tabular-nums">
+                       {new Date(log.timestamp || 0).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' })}
+                     </span>
+                     <span className={cn(
+                       "break-words text-muted-foreground",
+                       log.icon === 'warning' ? "text-amber-500" : 
+                       log.icon === 'error' ? "text-destructive" : ""
+                     )}>
+                       {log.text}
+                     </span>
+                   </div>
+                 ))}
+               </div>
             )}
           </div>
         )}

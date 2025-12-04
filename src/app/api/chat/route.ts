@@ -87,10 +87,10 @@ export async function POST(req: Request) {
         let currentPapers: Paper[] = [];
         
         // Heartbeat mechanism to keep connection alive during long operations
-        // Sends a transient notification every 15 seconds to prevent proxy/load balancer timeouts
-        // SOTA: Reduced from 30s to 15s to prevent ERR_INCOMPLETE_CHUNKED_ENCODING
+        // Sends a transient notification every 5 seconds to prevent proxy/load balancer timeouts
+        // SOTA: Reduced to 5s to ensure connection stability even with strict proxies
         let lastActivity = Date.now();
-        const HEARTBEAT_INTERVAL = 15 * 1000; // 15 seconds (reduced for better connection stability)
+        const HEARTBEAT_INTERVAL = 5 * 1000; // 5 seconds (optimized for stability)
         
         const heartbeatInterval = setInterval(() => {
           const timeSinceActivity = Date.now() - lastActivity;
@@ -153,6 +153,7 @@ export async function POST(req: Request) {
           let qualityCardId: string | null = null;
           let documentCardId: string | null = null;
           let documentContent = '';
+          let contentChunkCount = 0;
 
           for await (const event of research) {
             // Check for abort
@@ -433,6 +434,7 @@ export async function POST(req: Request) {
                 }
 
                 documentContent += event.content;
+                contentChunkCount++;
                 
                 // SOTA: Update activity on every content chunk to prevent timeout
                 updateActivity();
@@ -444,18 +446,22 @@ export async function POST(req: Request) {
                   id: generateId(),
                 });
 
-                // Update document card
-                writer.write({
-                  type: 'data-document',
-                  id: documentCardId,
-                  data: {
-                    title: '研究报告',
-                    content: documentContent,
-                    version: 1,
-                    wordCount: documentContent.split(/\s+/).filter(Boolean).length,
-                    citationCount: 0,
-                  },
-                });
+                // Update document card - THROTTLED
+                // SOTA: Only update the full document object every 50 chunks to save bandwidth
+                // This prevents ERR_INCOMPLETE_CHUNKED_ENCODING on large reports
+                if (contentChunkCount % 50 === 0) {
+                  writer.write({
+                    type: 'data-document',
+                    id: documentCardId,
+                    data: {
+                      title: '研究报告',
+                      content: documentContent,
+                      version: 1,
+                      wordCount: documentContent.split(/\s+/).filter(Boolean).length,
+                      citationCount: 0,
+                    },
+                  });
+                }
                 break;
 
               case 'complete':
@@ -575,6 +581,24 @@ export async function POST(req: Request) {
                     status: event.status === 'success' ? 'success' : event.status === 'error' ? 'error' : 'success',
                     duration: event.duration || 0,
                   },
+                });
+                break;
+
+              case 'agent_step_log':
+                // SOTA: Stream detailed logs to the client
+                updateActivity(); // Keep connection alive
+                writer.write({
+                  type: 'data-agent-log',
+                  id: event.stepId,
+                  data: {
+                    eventId: event.stepId,
+                    log: {
+                      text: event.log.message,
+                      timestamp: event.log.timestamp,
+                      icon: event.log.level === 'error' ? 'warning' : 'info',
+                      details: event.log.data ? JSON.stringify(event.log.data) : undefined
+                    }
+                  }
                 });
                 break;
               

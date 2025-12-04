@@ -5,7 +5,7 @@ import type { UIMessage } from 'ai';
 import type { InteractiveCard, CheckpointData, AgentStepData, AgentEventData } from '@/types/ui-message';
 import { cn } from '@/lib/utils';
 import { AgentStepInline } from './AgentStepInline';
-import { UnifiedTimeline } from './UnifiedTimeline';
+import { StageGroup } from './StageGroup';
 import { BaseCard } from '@/components/cards';
 import { TextPart } from './parts/TextPart';
 import { ReasoningPart } from './parts/ReasoningPart';
@@ -19,6 +19,7 @@ import { createCheckpointActions } from '@/types/cards';
 type StreamItemType = 
   | 'user-message' 
   | 'agent-step' 
+  | 'agent-event-group'
   | 'card' 
   | 'text' 
   | 'reasoning'
@@ -68,6 +69,7 @@ const SKIP_PART_TYPES = [
   'data-notification',
   'data-todo',
   'data-checkpoint', // Handled at card level
+  // We don't skip agent-event parts, but we handle them specifically in the loop
 ];
 
 // ============================================================================
@@ -120,6 +122,61 @@ function AgentStepsGroup({
 }
 
 /**
+ * Renders a group of agent events using StageGroup
+ */
+function AgentEventGroup({
+  events,
+  locale = 'zh'
+}: {
+  events: AgentEventData[];
+  locale?: 'en' | 'zh';
+}) {
+  if (events.length === 0) return null;
+
+  // Group events by stage to render appropriate StageGroups
+  // Since this is an interleaved stream, we might have events from different stages if the stream transitions
+  // e.g. Planning -> Searching within one block
+  
+  const groupedByStage = useMemo(() => {
+    const groups: { stage: AgentEventData['stage'], events: AgentEventData[] }[] = [];
+    let currentStage: AgentEventData['stage'] | null = null;
+    let currentEvents: AgentEventData[] = [];
+
+    for (const event of events) {
+      if (currentStage !== event.stage) {
+        if (currentStage && currentEvents.length > 0) {
+          groups.push({ stage: currentStage, events: [...currentEvents] });
+        }
+        currentStage = event.stage;
+        currentEvents = [event];
+      } else {
+        currentEvents.push(event);
+      }
+    }
+
+    if (currentStage && currentEvents.length > 0) {
+      groups.push({ stage: currentStage, events: currentEvents });
+    }
+
+    return groups;
+  }, [events]);
+
+  return (
+    <div className="stream-agent-event-group py-2 space-y-2">
+      {groupedByStage.map((group, index) => (
+        <StageGroup
+          key={`${group.stage}-${index}`}
+          stage={group.stage}
+          events={group.events}
+          isActive={group.events.some(e => e.status === 'running')}
+          locale={locale}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
  * Renders an interactive card with embedded actions
  */
 function StreamCard({ 
@@ -161,9 +218,10 @@ function StreamCard({
  * [User Message] → [Agent Steps] → [Card] → [Agent Steps] → [Card] → ...
  * 
  * Key behavior:
- * - Groups consecutive agent steps with shared timeline connector
+ * - Groups consecutive agent steps/events
  * - Renders cards inline when they appear in the stream
  * - Cards always have embedded action buttons
+ * - Supports both legacy AgentSteps and SOTA AgentEvents (interleaved)
  */
 export function ResearchStream({
   messages,
@@ -175,8 +233,13 @@ export function ResearchStream({
   locale = 'zh',
   className,
 }: ResearchStreamProps) {
-  // Use unified events if available, otherwise fall back to legacy steps
+  // Use unified events if available
   const hasUnifiedEvents = agentEvents.length > 0;
+  
+  // Create a map of latest event states for fast lookup
+  const eventMap = useMemo(() => {
+    return new Map(agentEvents.map(e => [e.id, e]));
+  }, [agentEvents]);
   
   // Build interleaved stream items from message parts
   const streamItems = useMemo(() => {
@@ -204,6 +267,9 @@ export function ResearchStream({
       checkpointMap.set(currentCheckpoint.cardId, currentCheckpoint);
     }
     
+    // Track processed events to avoid duplicates in the stream
+    const seenEventIds = new Set<string>();
+    
     // Second pass: build stream items
     for (const message of messages) {
       // User message
@@ -222,6 +288,35 @@ export function ResearchStream({
       // Assistant message - process parts in order
       if (message.role === 'assistant' && message.parts) {
         let currentAgentSteps: AgentStepData[] = [];
+        let currentEventIds: string[] = [];
+        
+        const flushAgentContent = () => {
+          // Flush legacy steps
+          if (currentAgentSteps.length > 0) {
+            items.push({
+              id: `steps-${itemIndex++}`,
+              type: 'agent-step',
+              data: [...currentAgentSteps],
+            });
+            currentAgentSteps = [];
+          }
+          
+          // Flush unified events
+          if (currentEventIds.length > 0) {
+            const events = currentEventIds
+              .map(id => eventMap.get(id))
+              .filter((e): e is AgentEventData => !!e);
+              
+            if (events.length > 0) {
+              items.push({
+                id: `events-${itemIndex++}`,
+                type: 'agent-event-group',
+                data: events,
+              });
+            }
+            currentEventIds = [];
+          }
+        };
         
         for (const part of message.parts) {
           const partType = part.type;
@@ -231,26 +326,34 @@ export function ResearchStream({
             continue;
           }
           
-          // Agent step - collect for grouping
+          // Legacy Agent Step
           if (partType === 'data-agent-step') {
-            const stepData = (part as { data: AgentStepData }).data;
-            if (stepData) {
-              currentAgentSteps.push(stepData);
+            // If we have unified events, we ignore legacy steps to avoid double rendering
+            if (!hasUnifiedEvents) {
+              const stepData = (part as { data: AgentStepData }).data;
+              if (stepData) {
+                currentAgentSteps.push(stepData);
+              }
             }
             continue;
           }
           
-          // Card types - flush agent steps first, then render card
-          if (CARD_PART_TYPES.includes(partType)) {
-            // Flush collected agent steps
-            if (currentAgentSteps.length > 0) {
-              items.push({
-                id: `steps-${itemIndex++}`,
-                type: 'agent-step',
-                data: [...currentAgentSteps],
-              });
-              currentAgentSteps = [];
+          // Unified Agent Event (SOTA)
+          // We trigger on 'data-agent-event' which signifies creation/start
+          if (partType === 'data-agent-event') {
+            const eventPart = part as { data: AgentEventData };
+            const eventId = eventPart.data?.id;
+            
+            if (eventId && !seenEventIds.has(eventId)) {
+              seenEventIds.add(eventId);
+              currentEventIds.push(eventId);
             }
+            continue;
+          }
+          
+          // Card types - flush agent content first, then render card
+          if (CARD_PART_TYPES.includes(partType)) {
+            flushAgentContent();
             
             // Get card from map or build from part
             const partWithId = part as { id?: string; data: unknown };
@@ -305,15 +408,7 @@ export function ResearchStream({
           
           // Text content
           if (partType === 'text') {
-            // Flush agent steps first
-            if (currentAgentSteps.length > 0) {
-              items.push({
-                id: `steps-${itemIndex++}`,
-                type: 'agent-step',
-                data: [...currentAgentSteps],
-              });
-              currentAgentSteps = [];
-            }
+            flushAgentContent();
             
             const textPart = part as { text: string; state?: string };
             items.push({
@@ -326,15 +421,7 @@ export function ResearchStream({
           
           // Reasoning/thinking
           if (partType === 'reasoning') {
-            // Flush agent steps first
-            if (currentAgentSteps.length > 0) {
-              items.push({
-                id: `steps-${itemIndex++}`,
-                type: 'agent-step',
-                data: [...currentAgentSteps],
-              });
-              currentAgentSteps = [];
-            }
+            flushAgentContent();
             
             const reasoningPart = part as { text: string; state?: string };
             items.push({
@@ -347,6 +434,10 @@ export function ResearchStream({
           
           // Source URLs
           if (partType === 'source-url') {
+            // Sources usually are attached to text, no need to flush? 
+            // Or flush to keep strict order? Let's flush to be safe.
+            flushAgentContent();
+
             const sourcePart = part as { sourceId: string; url: string; title?: string };
             items.push({
               id: `source-${message.id}-${itemIndex++}`,
@@ -357,19 +448,13 @@ export function ResearchStream({
           }
         }
         
-        // Flush any remaining agent steps at end of message
-        if (currentAgentSteps.length > 0) {
-          items.push({
-            id: `steps-${itemIndex++}`,
-            type: 'agent-step',
-            data: [...currentAgentSteps],
-          });
-        }
+        // Flush any remaining agent content at end of message
+        flushAgentContent();
       }
     }
     
     return items;
-  }, [messages, cards, currentCheckpoint]);
+  }, [messages, cards, currentCheckpoint, agentEvents, eventMap, hasUnifiedEvents]);
   
   // Handle card action
   const handleCardAction = (cardId: string, action: string) => {
@@ -395,21 +480,7 @@ export function ResearchStream({
   
   return (
     <div className={cn("research-stream", className)}>
-      {/* SOTA Unified Timeline - renders if unified events are available */}
-      {hasUnifiedEvents && (
-        <div className="unified-timeline-container mb-4">
-          <UnifiedTimeline events={agentEvents} locale={locale} />
-        </div>
-      )}
-      
-      {/* Legacy stream items - filtered to exclude agent steps when using unified events */}
-      {streamItems.filter(item => {
-        // Skip legacy agent-step items when unified events are available
-        if (hasUnifiedEvents && item.type === 'agent-step') {
-          return false;
-        }
-        return true;
-      }).map((item, index) => {
+      {streamItems.map((item, index) => {
         const isLastItem = index === streamItems.length - 1;
         
         switch (item.type) {
@@ -427,6 +498,15 @@ export function ResearchStream({
                 key={item.id} 
                 steps={item.data as AgentStepData[]}
                 isLastGroup={isLastItem}
+              />
+            );
+
+          case 'agent-event-group':
+            return (
+              <AgentEventGroup
+                key={item.id}
+                events={item.data as AgentEventData[]}
+                locale={locale}
               />
             );
           
