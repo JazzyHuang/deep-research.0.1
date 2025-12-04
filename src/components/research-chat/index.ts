@@ -16,6 +16,10 @@ export { ThinkingBubble, ThinkingIndicator } from './ThinkingBubble';
 export { LogLine } from './LogLine';
 export { SummaryBlock } from './SummaryBlock';
 
+// SOTA Unified Timeline (stage-grouped, i18n, deduplication)
+export { UnifiedTimeline, CompactTimeline } from './UnifiedTimeline';
+export { StageGroup } from './StageGroup';
+
 // Progress UI components
 export { ProgressHeader, deriveStageFromSteps, type ResearchStage } from './ProgressHeader';
 export { FloatingProgress } from './FloatingProgress';

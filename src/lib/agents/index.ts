@@ -5,17 +5,18 @@ export { generateReport, generateReferenceList, generateStyledReferenceList, gen
 
 // SOTA Coordinator with dynamic workflow (primary orchestration)
 export { coordinateResearch, decideNextStep } from './coordinator';
-export type { CoordinatorConfig, WorkflowState } from './coordinator';
+export type { CoordinatorConfig, WorkflowState, CoordinatorStreamEvent } from './coordinator';
 
 // Serialization utilities (moved from deprecated orchestrator)
-export function serializeStreamEvent(event: import('@/types/research').ExtendedStreamEvent): string {
+// Updated to support both legacy ExtendedStreamEvent and new CoordinatorStreamEvent
+export function serializeStreamEvent(event: import('./coordinator').CoordinatorStreamEvent): string {
   return JSON.stringify({
     ...event,
     timestamp: Date.now(),
   });
 }
 
-export function parseStreamEvent(data: string): import('@/types/research').ExtendedStreamEvent & { timestamp: number } {
+export function parseStreamEvent(data: string): import('./coordinator').CoordinatorStreamEvent & { timestamp: number } {
   return JSON.parse(data);
 }
 
@@ -79,6 +80,10 @@ export type {
   HallucinationDetection,
   EvidenceVerificationStatus,
 } from './evidence-auditor';
+
+// Event Manager
+export { EventManager } from './event-manager';
+export type { EmitEventOptions, UpdateEventOptions, CompleteEventOptions } from './event-manager';
 
 // Types
 export type { SearchAnalysis } from './researcher';

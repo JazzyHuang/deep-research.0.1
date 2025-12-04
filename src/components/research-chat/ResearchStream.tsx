@@ -2,9 +2,10 @@
 
 import { useMemo } from 'react';
 import type { UIMessage } from 'ai';
-import type { InteractiveCard, CheckpointData, AgentStepData } from '@/types/ui-message';
+import type { InteractiveCard, CheckpointData, AgentStepData, AgentEventData } from '@/types/ui-message';
 import { cn } from '@/lib/utils';
 import { AgentStepInline } from './AgentStepInline';
+import { UnifiedTimeline } from './UnifiedTimeline';
 import { BaseCard } from '@/components/cards';
 import { TextPart } from './parts/TextPart';
 import { ReasoningPart } from './parts/ReasoningPart';
@@ -33,8 +34,11 @@ interface ResearchStreamProps {
   messages: UIMessage[];
   cards: Map<string, InteractiveCard>;
   currentCheckpoint?: CheckpointData;
+  /** Unified agent events for SOTA timeline */
+  agentEvents?: AgentEventData[];
   onCardClick?: (cardId: string) => void;
   onCheckpointAction?: (checkpointId: string, action: string) => void;
+  locale?: 'en' | 'zh';
   className?: string;
 }
 
@@ -165,10 +169,14 @@ export function ResearchStream({
   messages,
   cards,
   currentCheckpoint,
+  agentEvents = [],
   onCardClick,
   onCheckpointAction,
+  locale = 'zh',
   className,
 }: ResearchStreamProps) {
+  // Use unified events if available, otherwise fall back to legacy steps
+  const hasUnifiedEvents = agentEvents.length > 0;
   
   // Build interleaved stream items from message parts
   const streamItems = useMemo(() => {
@@ -387,7 +395,21 @@ export function ResearchStream({
   
   return (
     <div className={cn("research-stream", className)}>
-      {streamItems.map((item, index) => {
+      {/* SOTA Unified Timeline - renders if unified events are available */}
+      {hasUnifiedEvents && (
+        <div className="unified-timeline-container mb-4">
+          <UnifiedTimeline events={agentEvents} locale={locale} />
+        </div>
+      )}
+      
+      {/* Legacy stream items - filtered to exclude agent steps when using unified events */}
+      {streamItems.filter(item => {
+        // Skip legacy agent-step items when unified events are available
+        if (hasUnifiedEvents && item.type === 'agent-step') {
+          return false;
+        }
+        return true;
+      }).map((item, index) => {
         const isLastItem = index === streamItems.length - 1;
         
         switch (item.type) {

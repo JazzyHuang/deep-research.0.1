@@ -105,7 +105,7 @@ export interface CheckpointData {
 }
 
 /**
- * Agent step progress data
+ * Agent step progress data (legacy)
  */
 export interface AgentStepData {
   id: string;
@@ -117,6 +117,77 @@ export interface AgentStepData {
   duration?: number;
   summary?: string;
   details?: string;
+}
+
+/**
+ * Unified Agent Event Data (SOTA)
+ * 
+ * This is the new unified event format that supports:
+ * - i18n with titleEn/titleZh
+ * - Iteration tracking for multi-round operations
+ * - Rich metadata for context
+ * - Stage-based grouping
+ */
+export interface AgentEventData {
+  id: string;
+  stage: 'planning' | 'searching' | 'analyzing' | 'writing' | 'reviewing' | 'validating' | 'complete' | 'error';
+  stepType: string;
+  titleEn: string;
+  titleZh: string;
+  status: 'pending' | 'running' | 'success' | 'error' | 'skipped';
+  iteration?: number;
+  totalIterations?: number;
+  meta?: AgentEventMetaData;
+  parentId?: string;
+  startTime: number;
+  endTime?: number;
+  duration?: number;
+}
+
+/**
+ * Metadata for agent events
+ */
+export interface AgentEventMetaData {
+  query?: string;
+  queries?: string[];
+  paperCount?: number;
+  newPaperCount?: number;
+  totalPaperCount?: number;
+  sourceBreakdown?: Record<string, number>;
+  processingCount?: number;
+  compressionRatio?: number;
+  score?: number;
+  decision?: 'pass' | 'iterate' | 'fail';
+  gapsFound?: number;
+  section?: string;
+  wordCount?: number;
+  citationCount?: number;
+  reason?: string;
+  summary?: string;
+  progress?: string;
+}
+
+/**
+ * Agent event update data
+ */
+export interface AgentEventUpdateData {
+  id: string;
+  status?: 'pending' | 'running' | 'success' | 'error' | 'skipped';
+  iteration?: number;
+  totalIterations?: number;
+  meta?: Partial<AgentEventMetaData>;
+  endTime?: number;
+  duration?: number;
+}
+
+/**
+ * Agent event complete data
+ */
+export interface AgentEventCompleteData {
+  id: string;
+  status: 'success' | 'error';
+  duration?: number;
+  meta?: Partial<AgentEventMetaData>;
 }
 
 /**
@@ -185,6 +256,11 @@ export interface ResearchDataParts {
   'step-complete': { stepId: string; status: string; duration: number };
   todo: TodoData;
   
+  // Unified Agent Events (SOTA)
+  'agent-event': AgentEventData;
+  'agent-event-update': AgentEventUpdateData;
+  'agent-event-complete': AgentEventCompleteData;
+  
   // UI elements
   'log-line': LogLineData;
   summary: SummaryBlockData;
@@ -192,7 +268,7 @@ export interface ResearchDataParts {
   
   // Session control events
   'session-complete': { timestamp: number };
-  'session-error': { error: string };
+  'session-error': { error: string; recoverable?: boolean };
   'agent-paused': { reason?: string };
 }
 

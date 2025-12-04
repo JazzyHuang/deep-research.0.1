@@ -17,6 +17,11 @@ import type {
   AgentStepLog,
   createAgentStep,
 } from '@/types/research';
+import type {
+  AgentEvent,
+  AgentEventStreamEvent,
+  AgentEventMeta,
+} from '@/types/agent-event';
 import { createResearchPlan, refineSearchQuery, refinePlanFromFeedback, type CriticFeedbackContext } from './planner';
 import { executeSearchRound, shouldContinueSearching } from './researcher';
 import { generateReport, generateStyledReferenceList } from './writer';
@@ -57,6 +62,11 @@ function createLog(
     data,
   };
 }
+
+/**
+ * Extended stream event type that includes unified agent events
+ */
+export type CoordinatorStreamEvent = ExtendedStreamEvent | AgentEventStreamEvent;
 
 export interface CoordinatorConfig {
   maxSearchRounds: number;
@@ -173,7 +183,7 @@ interface WorkflowDecision {
 export async function* coordinateResearch(
   userQuery: string,
   config: Partial<CoordinatorConfig> = {},
-): AsyncGenerator<ExtendedStreamEvent> {
+): AsyncGenerator<CoordinatorStreamEvent> {
   const settings = { ...DEFAULT_CONFIG, ...config };
   
   // Initialize memory
@@ -186,14 +196,34 @@ export async function* coordinateResearch(
   // Track parent step for nested steps
   let currentParentStepId: string | undefined;
   
+  // Track search round for unified events
+  let totalSearchRounds = settings.maxSearchRounds;
+  
   try {
-    yield { type: 'status', status: 'planning', message: 'Initializing research coordinator...' };
+    // Note: Removed duplicate status event here - unified events will be emitted instead
 
     // ================== PHASE 1: PLANNING ==================
     currentState = 'planning';
     const planStepId = generateStepId('plan');
     
-    // Emit step start for planning
+    // Emit unified event for planning
+    yield {
+      type: 'agent_event_start',
+      event: {
+        id: 'planning-create_plan',
+        stage: 'planning',
+        stepType: 'create_plan',
+        titleEn: 'Creating Research Plan',
+        titleZh: '创建研究计划',
+        status: 'running',
+        startTime: Date.now(),
+        meta: {
+          summary: `Analyzing: "${userQuery.slice(0, 100)}${userQuery.length > 100 ? '...' : ''}"`,
+        },
+      },
+    };
+    
+    // Legacy event for backward compatibility (will be removed after migration)
     yield {
       type: 'agent_step_start',
       step: {
@@ -211,12 +241,20 @@ export async function* coordinateResearch(
       },
     };
     
-    yield { type: 'status', status: 'planning', message: 'Creating research plan...' };
-    
     const plan = await createResearchPlan(userQuery);
     memory.setPlan(plan);
     
-    // Complete planning step
+    // Emit unified complete event
+    yield {
+      type: 'agent_event_complete',
+      id: 'planning-create_plan',
+      status: 'success',
+      meta: {
+        summary: `${plan.searchStrategies.length} search strategies, ${plan.subQuestions.length} sub-questions`,
+      },
+    };
+    
+    // Legacy event for backward compatibility
     yield {
       type: 'agent_step_complete',
       stepId: planStepId,
@@ -232,11 +270,6 @@ export async function* coordinateResearch(
     };
     
     yield { type: 'plan', plan };
-    yield { 
-      type: 'status', 
-      status: 'planning', 
-      message: `Plan created with ${plan.searchStrategies.length} search strategies and ${plan.subQuestions.length} sub-questions` 
-    };
 
     // ================== PHASE 1.5: VERIFIABLE CHECKLIST (SOTA) ==================
     let checklist: VerifiableChecklist | null = null;
@@ -297,6 +330,10 @@ export async function* coordinateResearch(
     currentState = 'searching';
     const searchPhaseStepId = generateStepId('search-phase');
     
+    // Note: Individual search rounds will emit their own unified events
+    // The search phase as a whole is tracked by the rounds
+    
+    // Legacy event for backward compatibility
     yield {
       type: 'agent_step_start',
       step: {
@@ -312,8 +349,6 @@ export async function* coordinateResearch(
         collapsed: false,
       },
     };
-    
-    yield { type: 'status', status: 'searching', message: 'Beginning literature search...' };
 
     let roundNumber = 0;
     let searchIndex = 0;
@@ -324,6 +359,28 @@ export async function* coordinateResearch(
       roundNumber++;
       const parallelSearchStepId = generateStepId('parallel-search');
       
+      // Emit unified event for parallel search
+      const parallelQueries = plan.searchStrategies.map(s => s.query);
+      yield {
+        type: 'agent_event_start',
+        event: {
+          id: `searching-parallel_search-${roundNumber}`,
+          stage: 'searching',
+          stepType: 'parallel_search',
+          titleEn: 'Parallel Multi-Strategy Search',
+          titleZh: '并行多策略搜索',
+          status: 'running',
+          iteration: roundNumber,
+          totalIterations: totalSearchRounds,
+          startTime: Date.now(),
+          meta: {
+            queries: parallelQueries,
+            query: parallelQueries.slice(0, 2).join(' | ') + (parallelQueries.length > 2 ? ` (+${parallelQueries.length - 2} more)` : ''),
+          },
+        },
+      };
+      
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_start',
         step: {
@@ -367,6 +424,19 @@ export async function* coordinateResearch(
         
         memory.addSearchRound(round);
         
+        // Emit unified complete event
+        yield {
+          type: 'agent_event_complete',
+          id: `searching-parallel_search-${roundNumber}`,
+          status: 'success',
+          meta: {
+            paperCount: uniquePapers.length,
+            sourceBreakdown,
+            summary: `Found ${uniquePapers.length} papers across ${Object.keys(sourceBreakdown).length} sources`,
+          },
+        };
+        
+        // Legacy events for backward compatibility
         yield {
           type: 'agent_step_log',
           stepId: parallelSearchStepId,
@@ -384,10 +454,6 @@ export async function* coordinateResearch(
         };
         
         yield { type: 'papers_found', papers: uniquePapers, round: roundNumber };
-        yield { 
-          type: 'analysis', 
-          insight: `Parallel search found ${uniquePapers.length} papers from ${JSON.stringify(sourceBreakdown)}` 
-        };
         
         // Skip to searchIndex beyond all parallel-processed strategies
         searchIndex = plan.searchStrategies.length;
@@ -431,7 +497,26 @@ export async function* coordinateResearch(
 
       if (!currentQuery) break;
 
-      // Emit step for this search round
+      // Emit unified event for this search round
+      yield {
+        type: 'agent_event_start',
+        event: {
+          id: `searching-search_round-${roundNumber}`,
+          stage: 'searching',
+          stepType: 'search_round',
+          titleEn: `Search Round ${roundNumber}`,
+          titleZh: `搜索 Round ${roundNumber}`,
+          status: 'running',
+          iteration: roundNumber,
+          totalIterations: totalSearchRounds,
+          startTime: Date.now(),
+          meta: {
+            query: currentQuery.query,
+          },
+        },
+      };
+      
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_start',
         step: {
@@ -530,7 +615,20 @@ export async function* coordinateResearch(
       
       memory.addSearchRound(round);
 
-      // Complete search round step
+      // Emit unified complete event
+      yield {
+        type: 'agent_event_complete',
+        id: `searching-search_round-${roundNumber}`,
+        status: 'success',
+        meta: {
+          query: currentQuery.query,
+          newPaperCount: newPapers.length,
+          totalPaperCount: memory.papers.length,
+          summary: `+${newPapers.length} papers (total: ${memory.papers.length})`,
+        },
+      };
+
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_complete',
         stepId: searchRoundStepId,
@@ -618,6 +716,27 @@ export async function* coordinateResearch(
       currentState = 'analyzing';
       const analysisStepId = generateStepId(`analysis-${iterationCount}`);
       
+      // Emit unified event for analysis
+      yield {
+        type: 'agent_event_start',
+        event: {
+          id: `analyzing-analyze_papers-${iterationCount}`,
+          stage: 'analyzing',
+          stepType: 'analyze_papers',
+          titleEn: `Analyzing Papers (Iteration ${iterationCount})`,
+          titleZh: `分析论文 (第 ${iterationCount} 轮)`,
+          status: 'running',
+          iteration: iterationCount,
+          totalIterations: settings.maxIterations,
+          startTime: Date.now(),
+          meta: {
+            processingCount: memory.papers.length,
+            progress: `Processing ${memory.papers.length} papers`,
+          },
+        },
+      };
+      
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_start',
         step: {
@@ -633,8 +752,6 @@ export async function* coordinateResearch(
           collapsed: true,
         },
       };
-      
-      yield { type: 'status', status: 'analyzing', message: `Analyzing papers (iteration ${iterationCount})...` };
 
       // Prioritize and compress papers
       const prioritizedPapers = prioritizePapers(memory.papers, plan.mainQuestion);
@@ -654,6 +771,19 @@ export async function* coordinateResearch(
         );
         paperContext = formatCompressedContext(compressed);
         
+        // Emit unified complete event
+        yield {
+          type: 'agent_event_complete',
+          id: `analyzing-analyze_papers-${iterationCount}`,
+          status: 'success',
+          meta: {
+            processingCount: compressed.papers.length,
+            compressionRatio: compressed.compressionRatio,
+            summary: `Processed ${compressed.papers.length} papers (${Math.round(compressed.compressionRatio * 100)}% compression)`,
+          },
+        };
+        
+        // Legacy event for backward compatibility
         yield {
           type: 'agent_step_complete',
           stepId: analysisStepId,
@@ -662,11 +792,6 @@ export async function* coordinateResearch(
             summary: `Compressed ${compressed.papers.length} papers (${Math.round(compressed.compressionRatio * 100)}% of original)`,
             result: { papersProcessed: compressed.papers.length, compressionRatio: compressed.compressionRatio },
           },
-        };
-        
-        yield { 
-          type: 'analysis', 
-          insight: `Compressed ${compressed.papers.length} papers (${Math.round(compressed.compressionRatio * 100)}% of original size)` 
         };
       } else {
         paperContext = prioritizedPapers.slice(0, 20).map((p, i) => 
@@ -686,7 +811,29 @@ export async function* coordinateResearch(
       // ================== PHASE 4: WRITING ==================
       currentState = 'writing';
       const writingStepId = generateStepId(`writing-${iterationCount}`);
+      const isRevision = iterationCount > 1;
       
+      // Emit unified event for writing
+      yield {
+        type: 'agent_event_start',
+        event: {
+          id: `writing-${isRevision ? 'revise_report' : 'generate_report'}-${iterationCount}`,
+          stage: 'writing',
+          stepType: isRevision ? 'revise_report' : 'generate_report',
+          titleEn: isRevision ? `Revising Report (Iteration ${iterationCount})` : 'Generating Research Report',
+          titleZh: isRevision ? `修订报告 (第 ${iterationCount} 轮)` : '撰写研究报告',
+          status: 'running',
+          iteration: iterationCount,
+          totalIterations: settings.maxIterations,
+          startTime: Date.now(),
+          meta: isRevision && lastQualityResult ? {
+            score: lastQualityResult.analysis.overallScore,
+            reason: lastQualityResult.reason,
+          } : undefined,
+        },
+      };
+      
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_start',
         step: {
@@ -711,16 +858,13 @@ export async function* coordinateResearch(
         },
       };
       
-      if (iterationCount === 1) {
-        yield { type: 'status', status: 'writing', message: 'Generating research report...' };
-      } else {
+      if (iterationCount > 1) {
         yield { 
           type: 'iteration_start', 
           reason: lastQualityResult?.reason || 'Improving report quality',
           iteration: iterationCount,
           feedback: lastQualityResult?.analysis.feedback || ''
         };
-        yield { type: 'status', status: 'writing', message: `Revising report (iteration ${iterationCount})...` };
       }
 
       // Generate report
@@ -761,7 +905,21 @@ export async function* coordinateResearch(
         }
       }
 
-      // Complete writing step
+      const wordCount = reportContent.split(/\s+/).length;
+      
+      // Emit unified complete event
+      yield {
+        type: 'agent_event_complete',
+        id: `writing-${isRevision ? 'revise_report' : 'generate_report'}-${iterationCount}`,
+        status: 'success',
+        meta: {
+          wordCount,
+          citationCount: collectedCitations.length,
+          summary: `${wordCount} words, ${collectedCitations.length} citations`,
+        },
+      };
+      
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_complete',
         stepId: writingStepId,
@@ -769,7 +927,7 @@ export async function* coordinateResearch(
         output: {
           summary: `Generated report with ${collectedCitations.length} citations`,
           result: {
-            wordCount: reportContent.split(/\s+/).length,
+            wordCount,
             citationCount: collectedCitations.length,
           },
         },
@@ -867,6 +1025,23 @@ export async function* coordinateResearch(
       currentState = 'reviewing';
       const reviewStepId = generateStepId(`review-${iterationCount}`);
       
+      // Emit unified event for quality review
+      yield {
+        type: 'agent_event_start',
+        event: {
+          id: `reviewing-quality_review-${iterationCount}`,
+          stage: 'reviewing',
+          stepType: 'quality_review',
+          titleEn: `Quality Review (Iteration ${iterationCount})`,
+          titleZh: `质量评审 (第 ${iterationCount} 轮)`,
+          status: 'running',
+          iteration: iterationCount,
+          totalIterations: settings.maxIterations,
+          startTime: Date.now(),
+        },
+      };
+      
+      // Legacy event for backward compatibility
       yield {
         type: 'agent_step_start',
         step: {
@@ -884,7 +1059,6 @@ export async function* coordinateResearch(
       };
       
       yield { type: 'quality_check_start', iteration: iterationCount };
-      yield { type: 'status', status: 'reviewing', message: 'Evaluating report quality...' };
 
       const qualityResult = await evaluateQuality(
         {
@@ -903,6 +1077,20 @@ export async function* coordinateResearch(
 
       lastQualityResult = qualityResult;
 
+      // Emit unified complete event
+      yield {
+        type: 'agent_event_complete',
+        id: `reviewing-quality_review-${iterationCount}`,
+        status: 'success',
+        meta: {
+          score: qualityResult.analysis.overallScore,
+          decision: qualityResult.decision,
+          gapsFound: qualityResult.analysis.gapsIdentified.length,
+          summary: `Score: ${qualityResult.analysis.overallScore}/100 · ${qualityResult.decision === 'pass' ? 'Passed' : qualityResult.analysis.gapsIdentified.length + ' gaps found'}`,
+        },
+      };
+      
+      // Legacy events for backward compatibility
       yield {
         type: 'agent_step_log',
         stepId: reviewStepId,

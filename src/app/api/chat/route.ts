@@ -9,6 +9,7 @@
  * - Supports transient data parts (notifications)
  * - Sends data parts with IDs for client-side reconciliation
  * - Uses generateId for consistent ID generation
+ * - Emits unified agent events for SOTA timeline visualization
  */
 
 import {
@@ -20,6 +21,7 @@ import { coordinateResearch } from '@/lib/agents';
 import { sessionManager } from '@/lib/session-manager';
 import type { ResearchUIMessage, ResearchDataParts } from '@/types/ui-message';
 import type { Paper } from '@/types/paper';
+import type { AgentEventStreamEvent } from '@/types/agent-event';
 
 export const maxDuration = 600; // 10 minutes max for deep research (SOTA requirement)
 
@@ -162,18 +164,53 @@ export async function POST(req: Request) {
             }
 
             switch (event.type) {
-              case 'status':
-                // Send as agent step
+              // ================== UNIFIED AGENT EVENTS (SOTA) ==================
+              case 'agent_event_start':
+                updateActivity();
                 writer.write({
-                  type: 'data-agent-step',
-                  id: createStepId('step'),
+                  type: 'data-agent-event',
+                  id: event.event.id,
+                  data: event.event,
+                });
+                break;
+                
+              case 'agent_event_update':
+                updateActivity();
+                writer.write({
+                  type: 'data-agent-event-update',
+                  id: event.update.id,
+                  data: event.update,
+                });
+                break;
+                
+              case 'agent_event_complete':
+                updateActivity();
+                writer.write({
+                  type: 'data-agent-event-complete',
+                  id: event.id,
                   data: {
-                    id: createStepId('step'),
-                    name: event.status,
-                    title: getStatusTitle(event.status),
-                    status: 'running',
+                    id: event.id,
+                    status: event.status,
+                    duration: event.duration,
+                    meta: event.meta,
                   },
                 });
+                break;
+              
+              // ================== LEGACY EVENTS (for backward compatibility) ==================
+              case 'status':
+                // Skip status events - unified events handle this now
+                // Legacy: Send as agent step (disabled to prevent duplicates)
+                // writer.write({
+                //   type: 'data-agent-step',
+                //   id: createStepId('step'),
+                //   data: {
+                //     id: createStepId('step'),
+                //     name: event.status,
+                //     title: getStatusTitle(event.status),
+                //     status: 'running',
+                //   },
+                // });
                 break;
 
               case 'plan':

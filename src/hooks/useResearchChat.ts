@@ -13,6 +13,9 @@ import type {
   CardType,
   InputButtonMode,
   AgentStepData,
+  AgentEventData,
+  AgentEventUpdateData,
+  AgentEventCompleteData,
 } from '@/types/ui-message';
 
 // ============================================================================
@@ -54,6 +57,8 @@ export interface UseResearchChatReturn {
   cards: Map<string, InteractiveCard>;
   currentCheckpoint: CheckpointData | undefined;
   agentSteps: AgentStepData[];
+  /** Unified agent events (SOTA) - grouped by stage with reconciliation */
+  agentEvents: AgentEventData[];
   taskProgress: TodoData;
   isComplete: boolean;
   isPaused: boolean;
@@ -352,7 +357,7 @@ export function useResearchChat({
     return undefined;
   }, [messages]);
 
-  // Extract agent steps from message parts with proper reconciliation
+  // Extract agent steps from message parts with proper reconciliation (legacy)
   const agentSteps = useMemo(() => {
     const stepsMap = new Map<string, AgentStepData>();
     
@@ -388,6 +393,74 @@ export function useResearchChat({
     }
     
     return Array.from(stepsMap.values());
+  }, [messages]);
+
+  // Extract unified agent events with reconciliation (SOTA)
+  const agentEvents = useMemo(() => {
+    const eventsMap = new Map<string, AgentEventData>();
+    
+    for (const message of messages) {
+      if (!message.parts) continue;
+      
+      for (const part of message.parts) {
+        // Handle new agent events
+        if (part.type === 'data-agent-event') {
+          const eventPart = part as { type: 'data-agent-event'; id?: string; data: AgentEventData };
+          if (eventPart.data?.id) {
+            const existingEvent = eventsMap.get(eventPart.data.id);
+            // Merge with existing event data (reconciliation)
+            eventsMap.set(eventPart.data.id, {
+              ...existingEvent,
+              ...eventPart.data,
+              meta: existingEvent?.meta 
+                ? { ...existingEvent.meta, ...eventPart.data.meta }
+                : eventPart.data.meta,
+            });
+          }
+        }
+        
+        // Handle event updates
+        if (part.type === 'data-agent-event-update') {
+          const updatePart = part as { type: 'data-agent-event-update'; id?: string; data: AgentEventUpdateData };
+          const eventId = updatePart.data.id;
+          const existingEvent = eventsMap.get(eventId);
+          if (existingEvent) {
+            eventsMap.set(eventId, {
+              ...existingEvent,
+              status: updatePart.data.status ?? existingEvent.status,
+              iteration: updatePart.data.iteration ?? existingEvent.iteration,
+              totalIterations: updatePart.data.totalIterations ?? existingEvent.totalIterations,
+              meta: updatePart.data.meta 
+                ? { ...existingEvent.meta, ...updatePart.data.meta }
+                : existingEvent.meta,
+              endTime: updatePart.data.endTime ?? existingEvent.endTime,
+              duration: updatePart.data.duration ?? existingEvent.duration,
+            });
+          }
+        }
+        
+        // Handle event completion
+        if (part.type === 'data-agent-event-complete') {
+          const completePart = part as { type: 'data-agent-event-complete'; id?: string; data: AgentEventCompleteData };
+          const eventId = completePart.data.id;
+          const existingEvent = eventsMap.get(eventId);
+          if (existingEvent) {
+            eventsMap.set(eventId, {
+              ...existingEvent,
+              status: completePart.data.status,
+              duration: completePart.data.duration ?? existingEvent.duration,
+              endTime: existingEvent.startTime + (completePart.data.duration || 0),
+              meta: completePart.data.meta 
+                ? { ...existingEvent.meta, ...completePart.data.meta }
+                : existingEvent.meta,
+            });
+          }
+        }
+      }
+    }
+    
+    // Sort events by startTime
+    return Array.from(eventsMap.values()).sort((a, b) => a.startTime - b.startTime);
   }, [messages]);
 
   // Extract task progress
@@ -540,6 +613,7 @@ export function useResearchChat({
     cards,
     currentCheckpoint,
     agentSteps,
+    agentEvents,
     taskProgress,
     isComplete,
     isPaused,
