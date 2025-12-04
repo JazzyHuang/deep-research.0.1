@@ -170,13 +170,16 @@ export function useResearchChat({
       let errorMessage = err.message;
       const msg = err.message.toLowerCase();
       
-      // Log original error for debugging
-      console.error('[ResearchChat] Original error:', err.message);
+      // SOTA: Enhanced error logging with timestamp for debugging
+      console.error('[ResearchChat] Original error:', err.message, 'at', new Date().toISOString());
       
-      // Detect stream interruption errors (most important case)
-      if (msg.includes('incomplete') || msg.includes('chunked') || msg.includes('err_incomplete_chunked_encoding')) {
+      // SOTA: Detect stream interruption errors with more patterns
+      // ERR_INCOMPLETE_CHUNKED_ENCODING is the most common cause of report generation failures
+      if (msg.includes('incomplete') || msg.includes('chunked') || 
+          msg.includes('err_incomplete_chunked_encoding') || msg.includes('err_incomplete')) {
         // Stream was interrupted - likely timeout on server side
         errorMessage = '数据流中断，报告生成可能超时。请刷新页面重试或简化研究问题';
+        console.error('[ResearchChat] Stream interruption detected - likely ERR_INCOMPLETE_CHUNKED_ENCODING');
       } else if (msg.includes('aborted') || msg.includes('terminated') || msg.includes('the operation was aborted')) {
         // Request was explicitly aborted
         errorMessage = '请求被中断，可能是超时导致。请刷新页面重试';
@@ -237,10 +240,25 @@ export function useResearchChat({
         }
       }
       
-      // Handle session errors
+      // Handle session errors with recovery guidance
       if (dataPart.type === 'data-session-error') {
         const errorData = dataPart.data as ResearchDataParts['session-error'];
-        toast.error(errorData.error);
+        
+        // SOTA: Check if error is recoverable and provide appropriate guidance
+        const isRecoverable = (errorData as { recoverable?: boolean }).recoverable;
+        
+        if (isRecoverable) {
+          // Show a less alarming toast for recoverable errors
+          toast.warning(errorData.error, {
+            description: '您可以尝试刷新页面重试',
+            duration: 8000,
+          });
+        } else {
+          toast.error(errorData.error, {
+            duration: 10000,
+          });
+        }
+        
         onError?.(errorData.error);
       }
     },
@@ -546,6 +564,14 @@ export function useResearchChat({
     data?: Record<string, unknown>
   ) => {
     console.log('[ResearchChat] Responding to checkpoint:', { sessionId, checkpointId, action });
+    
+    // Validate session ID before making API call
+    if (!sessionId || sessionId.trim() === '') {
+      console.error('[ResearchChat] Invalid session ID');
+      toast.error('会话无效，请刷新页面重试');
+      return;
+    }
+    
     try {
       const response = await fetch(`/api/research/sessions/${sessionId}/checkpoint`, {
         method: 'POST',
@@ -553,18 +579,53 @@ export function useResearchChat({
         body: JSON.stringify({ checkpointId, action, data }),
       });
       
-      const result = await response.json();
+      // Handle non-JSON responses or empty body
+      let result: Record<string, unknown> = {};
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        if (text && text.trim()) {
+          try {
+            result = JSON.parse(text);
+          } catch (parseError) {
+            console.error('[ResearchChat] Failed to parse JSON response:', parseError, 'Raw text:', text);
+            result = { error: '服务器响应格式错误' };
+          }
+        } else {
+          console.warn('[ResearchChat] Empty response body from checkpoint API');
+          result = { error: '服务器返回空响应' };
+        }
+      } else {
+        console.warn('[ResearchChat] Non-JSON response from checkpoint API:', contentType);
+        result = { error: '服务器响应格式错误' };
+      }
       
       if (!response.ok) {
-        console.error('[ResearchChat] Checkpoint API error:', result);
-        toast.error(result.error || '操作失败，请重试');
+        const errorMessage = (result.error as string) || 
+          (response.status === 404 ? '会话不存在或已过期' : 
+           response.status === 400 ? '请求参数无效' :
+           response.status >= 500 ? '服务器错误，请稍后重试' :
+           '操作失败，请重试');
+        console.error('[ResearchChat] Checkpoint API error:', { status: response.status, result });
+        toast.error(errorMessage);
         return;
       }
       
       console.log('[ResearchChat] Checkpoint resolved:', result);
     } catch (err) {
+      // Classify the error for better user feedback
+      const errorMessage = err instanceof Error ? err.message.toLowerCase() : '';
+      let userMessage = '操作失败，请重试';
+      
+      if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('failed to fetch')) {
+        userMessage = '网络连接失败，请检查网络后重试';
+      } else if (errorMessage.includes('aborted') || errorMessage.includes('timeout')) {
+        userMessage = '请求超时，请重试';
+      }
+      
       console.error('[ResearchChat] Failed to respond to checkpoint:', err);
-      toast.error('操作失败，请重试');
+      toast.error(userMessage);
     }
   }, [sessionId]);
 

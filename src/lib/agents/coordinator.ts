@@ -813,6 +813,16 @@ export async function* coordinateResearch(
       const writingStepId = generateStepId(`writing-${iterationCount}`);
       const isRevision = iterationCount > 1;
       
+      // SOTA: Send status notification to keep connection alive during writer initialization
+      // This prevents ERR_INCOMPLETE_CHUNKED_ENCODING during the LLM warm-up phase
+      yield { 
+        type: 'status', 
+        status: 'writing', 
+        message: isRevision 
+          ? `正在修订报告 (第 ${iterationCount} 轮)...` 
+          : '正在准备生成研究报告...' 
+      };
+      
       // Emit unified event for writing
       yield {
         type: 'agent_event_start',
@@ -881,6 +891,7 @@ export async function* coordinateResearch(
       });
 
       let currentSectionName = '';
+      let sectionCount = 0;
       for await (const event of reportGenerator) {
         if (event.type === 'content') {
           reportContent += event.data as string;
@@ -894,6 +905,15 @@ export async function* coordinateResearch(
         } else if (event.type === 'section') {
           const section = event.data as { heading: string; level: number };
           currentSectionName = section.heading;
+          sectionCount++;
+          
+          // SOTA: Emit status on each section to keep connection alive during long generations
+          yield { 
+            type: 'status', 
+            status: 'writing', 
+            message: `正在撰写: ${section.heading}` 
+          };
+          
           yield {
             type: 'agent_step_log',
             stepId: writingStepId,

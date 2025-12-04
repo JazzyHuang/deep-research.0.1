@@ -204,6 +204,11 @@ Begin writing the report now:`;
   let currentSection = '';
   let buffer = '';
   let streamError: Error | null = null;
+  let lastYieldTime = Date.now();
+  let chunkCount = 0;
+  
+  // SOTA: Track content generation progress for better error recovery
+  const PROGRESS_LOG_INTERVAL = 50; // Log progress every 50 chunks
   
   // Wrap stream with error handling for better error detection during iteration
   const wrappedStream = wrapStreamWithErrorHandling(textStream, (error) => {
@@ -214,6 +219,8 @@ Begin writing the report now:`;
     for await (const chunk of wrappedStream) {
       buffer += chunk;
       fullContent += chunk;
+      chunkCount++;
+      lastYieldTime = Date.now();
 
       // Detect section headers
       const headerMatch = buffer.match(/^(#{1,3})\s+(.+)$/m);
@@ -247,32 +254,50 @@ Begin writing the report now:`;
       if (buffer.length > 200) {
         buffer = buffer.slice(-100);
       }
+      
+      // SOTA: Log progress periodically for debugging stream issues
+      if (chunkCount % PROGRESS_LOG_INTERVAL === 0) {
+        console.log(`[Writer] Progress: ${chunkCount} chunks, ${fullContent.length} chars, section: "${currentSection}"`);
+      }
     }
   } catch (error) {
     // Handle streaming errors with detailed message
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const lowerMsg = errorMessage.toLowerCase();
     
-    // Log detailed error for debugging
+    // SOTA: Enhanced error logging with full context for debugging stream issues
     console.error('[Writer] Stream error details:', {
       message: errorMessage,
       contentGenerated: fullContent.length,
+      chunksReceived: chunkCount,
+      currentSection,
       usedFallback: usedFallbackModel,
+      timeSinceLastChunk: Date.now() - lastYieldTime,
     });
     
-    // Check if we have substantial partial content that could be salvaged
-    const hasSubstantialContent = fullContent.length > 2000;
+    // SOTA: Lowered threshold from 2000 to 1000 chars for better partial content recovery
+    // A report with 1000+ chars likely has useful content (title + abstract at minimum)
+    const hasSubstantialContent = fullContent.length > 1000;
+    
+    // SOTA: Check for ERR_INCOMPLETE_CHUNKED_ENCODING specifically
+    const isChunkedEncodingError = lowerMsg.includes('incomplete') || 
+                                    lowerMsg.includes('chunked') || 
+                                    lowerMsg.includes('err_incomplete');
     
     let userFriendlyMessage: string;
-    // Detect stream interruption (abort from timeout)
-    if (lowerMsg.includes('aborted') || lowerMsg.includes('terminated') || lowerMsg.includes('the operation was aborted')) {
+    
+    // Detect stream interruption (abort from timeout or chunked encoding error)
+    if (lowerMsg.includes('aborted') || lowerMsg.includes('terminated') || 
+        lowerMsg.includes('the operation was aborted') || isChunkedEncodingError) {
       if (hasSubstantialContent) {
         // We have partial content - log but don't throw, let the content through
-        console.warn(`[Writer] Stream was aborted but has ${fullContent.length} chars of content, continuing with partial report`);
+        console.warn(`[Writer] Stream was interrupted but has ${fullContent.length} chars of content (${chunkCount} chunks), continuing with partial report`);
         streamError = error instanceof Error ? error : new Error(String(error));
         // Don't throw - let the partial content be used
       } else {
-        userFriendlyMessage = '报告生成被中断（可能是超时），请重试或简化研究问题';
+        userFriendlyMessage = isChunkedEncodingError
+          ? '数据流传输中断，请刷新页面重试'
+          : '报告生成被中断（可能是超时），请重试或简化研究问题';
         throw new Error(userFriendlyMessage);
       }
     } else if (lowerMsg.includes('fetch') || lowerMsg.includes('network') || lowerMsg.includes('connection') || lowerMsg.includes('socket')) {
@@ -284,11 +309,11 @@ Begin writing the report now:`;
       if (!hasSubstantialContent) {
         throw new Error(userFriendlyMessage);
       }
-      console.warn(`[Writer] Network error but has ${fullContent.length} chars, using partial content`);
+      console.warn(`[Writer] Network error but has ${fullContent.length} chars (${chunkCount} chunks), using partial content`);
       streamError = error instanceof Error ? error : new Error(String(error));
     } else if (lowerMsg.includes('timeout') || lowerMsg.includes('timed out')) {
       if (hasSubstantialContent) {
-        console.warn(`[Writer] Timeout but has ${fullContent.length} chars, using partial content`);
+        console.warn(`[Writer] Timeout but has ${fullContent.length} chars (${chunkCount} chunks), using partial content`);
         streamError = error instanceof Error ? error : new Error(String(error));
       } else {
         userFriendlyMessage = '报告生成超时，请稍后重试或简化研究问题';
@@ -301,21 +326,33 @@ Begin writing the report now:`;
       userFriendlyMessage = 'API 认证失败，请检查配置';
       throw new Error(userFriendlyMessage);
     } else {
-      userFriendlyMessage = `报告生成失败: ${errorMessage}`;
-      throw new Error(userFriendlyMessage);
+      // SOTA: For unknown errors, still try to salvage content if we have enough
+      if (hasSubstantialContent) {
+        console.warn(`[Writer] Unknown error but has ${fullContent.length} chars, attempting to use partial content: ${errorMessage}`);
+        streamError = error instanceof Error ? error : new Error(String(error));
+      } else {
+        userFriendlyMessage = `报告生成失败: ${errorMessage}`;
+        throw new Error(userFriendlyMessage);
+      }
     }
   }
   
+  // SOTA: Enhanced partial content validation with better threshold
   // Check if we got partial content before an error
   if (streamError && fullContent.length < 500) {
     // Very little content generated before error - report the error
-    console.error('[Writer] Stream ended prematurely with minimal content');
+    console.error(`[Writer] Stream ended prematurely with minimal content (${fullContent.length} chars, ${chunkCount} chunks)`);
     throw new Error('报告生成不完整，请重试');
   }
   
   // Log if we're using partial content
   if (streamError && fullContent.length >= 500) {
-    console.log(`[Writer] Using partial content (${fullContent.length} chars) after stream error`);
+    console.log(`[Writer] Using partial content (${fullContent.length} chars, ${chunkCount} chunks) after stream error: ${streamError.message}`);
+    
+    // SOTA: Add a note to the content indicating it may be incomplete
+    if (fullContent.length < 3000) {
+      fullContent += '\n\n---\n*注意：报告可能因网络问题而不完整。*\n';
+    }
   }
 
   // Parse sections from full content

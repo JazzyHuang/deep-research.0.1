@@ -43,7 +43,10 @@ export const MAX_OUTPUT_TOKENS = {
 } as const;
 
 /**
- * Custom fetch with timeout support for OpenRouter calls
+ * Custom fetch with timeout and keep-alive support for OpenRouter calls
+ * 
+ * SOTA: Added keepalive: true to prevent connection drops during long streaming operations
+ * This helps prevent ERR_INCOMPLETE_CHUNKED_ENCODING errors during report generation
  */
 function createFetchWithTimeout(timeoutMs: number = TIMEOUTS.LONG_GENERATION) {
   return async (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -54,6 +57,14 @@ function createFetchWithTimeout(timeoutMs: number = TIMEOUTS.LONG_GENERATION) {
       const response = await fetch(url, {
         ...init,
         signal: controller.signal,
+        // SOTA: Enable keep-alive to maintain persistent connection during long streams
+        // This reduces the chance of ERR_INCOMPLETE_CHUNKED_ENCODING
+        keepalive: true,
+        // SOTA: Add Connection header to ensure the server maintains the connection
+        headers: {
+          ...((init?.headers as Record<string, string>) || {}),
+          'Connection': 'keep-alive',
+        },
       });
       return response;
     } finally {

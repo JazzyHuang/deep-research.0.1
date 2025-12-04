@@ -87,9 +87,10 @@ export async function POST(req: Request) {
         let currentPapers: Paper[] = [];
         
         // Heartbeat mechanism to keep connection alive during long operations
-        // Sends a transient notification every 30 seconds to prevent proxy/load balancer timeouts
+        // Sends a transient notification every 15 seconds to prevent proxy/load balancer timeouts
+        // SOTA: Reduced from 30s to 15s to prevent ERR_INCOMPLETE_CHUNKED_ENCODING
         let lastActivity = Date.now();
-        const HEARTBEAT_INTERVAL = 30 * 1000; // 30 seconds
+        const HEARTBEAT_INTERVAL = 15 * 1000; // 15 seconds (reduced for better connection stability)
         
         const heartbeatInterval = setInterval(() => {
           const timeSinceActivity = Date.now() - lastActivity;
@@ -199,18 +200,16 @@ export async function POST(req: Request) {
               
               // ================== LEGACY EVENTS (for backward compatibility) ==================
               case 'status':
-                // Skip status events - unified events handle this now
-                // Legacy: Send as agent step (disabled to prevent duplicates)
-                // writer.write({
-                //   type: 'data-agent-step',
-                //   id: createStepId('step'),
-                //   data: {
-                //     id: createStepId('step'),
-                //     name: event.status,
-                //     title: getStatusTitle(event.status),
-                //     status: 'running',
-                //   },
-                // });
+                // SOTA: Send status events as transient notifications to keep connection alive
+                // This is critical for preventing ERR_INCOMPLETE_CHUNKED_ENCODING during long operations
+                updateActivity();
+                if (event.message) {
+                  writer.write({
+                    type: 'data-notification',
+                    data: { message: event.message, level: 'info' },
+                    transient: true,
+                  });
+                }
                 break;
 
               case 'plan':
@@ -410,6 +409,16 @@ export async function POST(req: Request) {
                 // Streaming document content
                 if (!documentCardId) {
                   documentCardId = createStepId('document');
+                  
+                  // SOTA: Send notification before report generation to keep connection alive
+                  // This prevents timeout during the LLM initialization phase
+                  updateActivity();
+                  writer.write({
+                    type: 'data-notification',
+                    data: { message: '开始生成研究报告...', level: 'info' },
+                    transient: true,
+                  });
+                  
                   writer.write({
                     type: 'data-document',
                     id: documentCardId,
@@ -424,6 +433,9 @@ export async function POST(req: Request) {
                 }
 
                 documentContent += event.content;
+                
+                // SOTA: Update activity on every content chunk to prevent timeout
+                updateActivity();
                 
                 // Stream the text content using text-delta
                 writer.write({
@@ -563,6 +575,17 @@ export async function POST(req: Request) {
                     status: event.status === 'success' ? 'success' : event.status === 'error' ? 'error' : 'success',
                     duration: event.duration || 0,
                   },
+                });
+                break;
+              
+              case 'writing_start':
+                // SOTA: Send notification when a new section starts being written
+                // This keeps the connection alive during long report generation
+                updateActivity();
+                writer.write({
+                  type: 'data-notification',
+                  data: { message: `撰写中: ${event.section}`, level: 'info' },
+                  transient: true,
                 });
                 break;
             }
