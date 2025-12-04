@@ -401,13 +401,13 @@ export const paperCache = new PaperCache();
 /**
  * Decorator for caching paper retrieval results
  */
-export function withCache<T extends (...args: any[]) => Promise<Paper | null>>(
+export function withCache<T extends (...args: string[]) => Promise<Paper | null>>(
   fn: T,
-  options?: { keyExtractor?: (...args: Parameters<T>) => string }
+  options?: { keyExtractor?: (...args: string[]) => string }
 ): T {
   const keyExtractor = options?.keyExtractor || ((id: string) => id);
   
-  return (async (...args: Parameters<T>): Promise<Paper | null> => {
+  return (async (...args: string[]): Promise<Paper | null> => {
     const key = keyExtractor(...args);
     
     // Check cache first
@@ -459,4 +459,245 @@ export function resetCacheStats(): void {
   // Create new instance to reset stats
   paperCache.clear();
 }
+
+// ============================================
+// Query-Level Caching for Search Results
+// ============================================
+
+/**
+ * Cached query result with papers
+ */
+interface QueryCacheEntry {
+  papers: Paper[];
+  totalHits: number;
+  sourceBreakdown: Record<string, number>;
+  timestamp: number;
+  accessCount: number;
+}
+
+/**
+ * Query cache configuration
+ */
+export interface QueryCacheConfig {
+  maxEntries: number;
+  ttlMs: number;              // Short TTL (5-10 minutes recommended)
+  sessionScopedTtlMs: number; // Longer TTL for session-scoped queries
+}
+
+const DEFAULT_QUERY_CACHE_CONFIG: QueryCacheConfig = {
+  maxEntries: 200,
+  ttlMs: 5 * 60 * 1000,             // 5 minutes for general queries
+  sessionScopedTtlMs: 30 * 60 * 1000, // 30 minutes for session-scoped queries
+};
+
+/**
+ * QueryCache - Caches search results by normalized query string
+ * Reduces redundant API calls for identical or similar queries
+ */
+export class QueryCache {
+  private cache: Map<string, QueryCacheEntry>;
+  private sessionCache: Map<string, Map<string, QueryCacheEntry>>;
+  private config: QueryCacheConfig;
+  private hits: number = 0;
+  private misses: number = 0;
+
+  constructor(config: Partial<QueryCacheConfig> = {}) {
+    this.cache = new Map();
+    this.sessionCache = new Map();
+    this.config = { ...DEFAULT_QUERY_CACHE_CONFIG, ...config };
+  }
+
+  /**
+   * Normalize query string for cache key generation
+   */
+  private normalizeQuery(query: string): string {
+    return query
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ')           // Normalize whitespace
+      .replace(/[^\w\s]/g, '')        // Remove special characters
+      .split(' ')
+      .sort()                          // Sort words for order-independent matching
+      .join(' ');
+  }
+
+  /**
+   * Generate cache key from query and options
+   */
+  private getCacheKey(
+    query: string,
+    options?: { yearFrom?: number; yearTo?: number; openAccess?: boolean }
+  ): string {
+    const normalized = this.normalizeQuery(query);
+    const optionStr = options
+      ? `_${options.yearFrom || ''}_${options.yearTo || ''}_${options.openAccess ? 'oa' : ''}`
+      : '';
+    return `${normalized}${optionStr}`;
+  }
+
+  /**
+   * Get cached search results
+   */
+  get(
+    query: string,
+    options?: { yearFrom?: number; yearTo?: number; openAccess?: boolean },
+    sessionId?: string
+  ): { papers: Paper[]; totalHits: number; sourceBreakdown: Record<string, number> } | null {
+    const key = this.getCacheKey(query, options);
+    
+    // Check session-scoped cache first
+    if (sessionId) {
+      const sessionMap = this.sessionCache.get(sessionId);
+      if (sessionMap) {
+        const entry = sessionMap.get(key);
+        if (entry && Date.now() - entry.timestamp < this.config.sessionScopedTtlMs) {
+          entry.accessCount++;
+          this.hits++;
+          return {
+            papers: entry.papers,
+            totalHits: entry.totalHits,
+            sourceBreakdown: entry.sourceBreakdown,
+          };
+        }
+      }
+    }
+    
+    // Check global cache
+    const entry = this.cache.get(key);
+    if (!entry) {
+      this.misses++;
+      return null;
+    }
+    
+    // Check if expired
+    if (Date.now() - entry.timestamp > this.config.ttlMs) {
+      this.cache.delete(key);
+      this.misses++;
+      return null;
+    }
+    
+    entry.accessCount++;
+    this.hits++;
+    return {
+      papers: entry.papers,
+      totalHits: entry.totalHits,
+      sourceBreakdown: entry.sourceBreakdown,
+    };
+  }
+
+  /**
+   * Cache search results
+   */
+  set(
+    query: string,
+    result: { papers: Paper[]; totalHits: number; sourceBreakdown: Record<string, number> },
+    options?: { yearFrom?: number; yearTo?: number; openAccess?: boolean },
+    sessionId?: string
+  ): void {
+    const key = this.getCacheKey(query, options);
+    
+    const entry: QueryCacheEntry = {
+      papers: result.papers,
+      totalHits: result.totalHits,
+      sourceBreakdown: result.sourceBreakdown,
+      timestamp: Date.now(),
+      accessCount: 1,
+    };
+    
+    // Store in session cache if sessionId provided
+    if (sessionId) {
+      let sessionMap = this.sessionCache.get(sessionId);
+      if (!sessionMap) {
+        sessionMap = new Map();
+        this.sessionCache.set(sessionId, sessionMap);
+      }
+      sessionMap.set(key, entry);
+    }
+    
+    // Also store in global cache
+    if (this.cache.size >= this.config.maxEntries) {
+      this.evictOldest();
+    }
+    this.cache.set(key, entry);
+    
+    // Also cache individual papers
+    for (const paper of result.papers) {
+      paperCache.set(paper);
+    }
+  }
+
+  /**
+   * Check if query is cached
+   */
+  has(
+    query: string,
+    options?: { yearFrom?: number; yearTo?: number; openAccess?: boolean }
+  ): boolean {
+    const key = this.getCacheKey(query, options);
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+    if (Date.now() - entry.timestamp > this.config.ttlMs) {
+      this.cache.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Clear session cache
+   */
+  clearSession(sessionId: string): void {
+    this.sessionCache.delete(sessionId);
+  }
+
+  /**
+   * Clear all caches
+   */
+  clear(): void {
+    this.cache.clear();
+    this.sessionCache.clear();
+    this.hits = 0;
+    this.misses = 0;
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats(): {
+    totalEntries: number;
+    sessionCaches: number;
+    hits: number;
+    misses: number;
+    hitRate: number;
+  } {
+    const totalRequests = this.hits + this.misses;
+    return {
+      totalEntries: this.cache.size,
+      sessionCaches: this.sessionCache.size,
+      hits: this.hits,
+      misses: this.misses,
+      hitRate: totalRequests > 0 ? this.hits / totalRequests : 0,
+    };
+  }
+
+  /**
+   * Evict oldest entry
+   */
+  private evictOldest(): void {
+    let oldest: { key: string; timestamp: number } | null = null;
+    
+    for (const [key, entry] of this.cache.entries()) {
+      if (!oldest || entry.timestamp < oldest.timestamp) {
+        oldest = { key, timestamp: entry.timestamp };
+      }
+    }
+    
+    if (oldest) {
+      this.cache.delete(oldest.key);
+    }
+  }
+}
+
+// Export singleton instance
+export const queryCache = new QueryCache();
 

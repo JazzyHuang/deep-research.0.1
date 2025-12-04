@@ -1,20 +1,95 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { 
   ChevronsDownUp, 
   ChevronsUpDown, 
   Activity,
   CheckCircle,
   XCircle,
-  Loader2
+  Loader2,
+  Brain,
+  Search,
+  PenLine,
+  Shield,
+  CheckCircle2,
+  ListTree,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { ExecutionStep } from './execution-step';
 import type { AgentStep } from '@/types/research';
+
+/**
+ * Agent roles for grouping steps
+ */
+type AgentRole = 'all' | 'planner' | 'researcher' | 'writer' | 'critic' | 'validator';
+
+const ROLE_CONFIG: Record<AgentRole, { 
+  label: string; 
+  icon: React.ReactNode; 
+  patterns: string[];
+  color: string;
+}> = {
+  all: { 
+    label: 'All', 
+    icon: <Activity className="w-3.5 h-3.5" />,
+    patterns: [],
+    color: 'text-foreground',
+  },
+  planner: { 
+    label: 'Planner', 
+    icon: <Brain className="w-3.5 h-3.5" />,
+    patterns: ['plan', 'thinking', 'decision', 'strategy'],
+    color: 'text-purple-500',
+  },
+  researcher: { 
+    label: 'Researcher', 
+    icon: <Search className="w-3.5 h-3.5" />,
+    patterns: ['search', 'literature', 'paper', 'source'],
+    color: 'text-blue-500',
+  },
+  writer: { 
+    label: 'Writer', 
+    icon: <PenLine className="w-3.5 h-3.5" />,
+    patterns: ['writ', 'generat', 'report', 'draft', 'final'],
+    color: 'text-emerald-500',
+  },
+  critic: { 
+    label: 'Critic', 
+    icon: <Shield className="w-3.5 h-3.5" />,
+    patterns: ['quality', 'review', 'critic', 'analysis', 'analyz'],
+    color: 'text-amber-500',
+  },
+  validator: { 
+    label: 'Validator', 
+    icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    patterns: ['valid', 'citation', 'verify', 'check'],
+    color: 'text-cyan-500',
+  },
+};
+
+/**
+ * Classify a step into an agent role
+ */
+function classifyStep(step: AgentStep): AgentRole {
+  const searchText = `${step.name} ${step.title}`.toLowerCase();
+  
+  for (const [role, config] of Object.entries(ROLE_CONFIG) as [AgentRole, typeof ROLE_CONFIG[AgentRole]][]) {
+    if (role === 'all') continue;
+    for (const pattern of config.patterns) {
+      if (searchText.includes(pattern)) {
+        return role;
+      }
+    }
+  }
+  
+  return 'planner'; // Default to planner for unclassified steps
+}
 
 interface ExecutionTimelineProps {
   steps: Map<string, AgentStep>;
@@ -35,24 +110,75 @@ export function ExecutionTimeline({
   className,
   maxHeight = 'calc(100vh - 400px)',
 }: ExecutionTimelineProps) {
-  // Calculate stats
-  const stats = useMemo(() => {
+  const [activeRole, setActiveRole] = useState<AgentRole>('all');
+  // Calculate stats and group by role
+  const { stats, roleStats, roleSteps } = useMemo(() => {
     let total = 0;
     let running = 0;
     let success = 0;
     let error = 0;
     let totalDuration = 0;
+    
+    const roleSteps: Record<AgentRole, string[]> = {
+      all: [],
+      planner: [],
+      researcher: [],
+      writer: [],
+      critic: [],
+      validator: [],
+    };
+    
+    const roleStats: Record<AgentRole, { running: number; success: number; error: number }> = {
+      all: { running: 0, success: 0, error: 0 },
+      planner: { running: 0, success: 0, error: 0 },
+      researcher: { running: 0, success: 0, error: 0 },
+      writer: { running: 0, success: 0, error: 0 },
+      critic: { running: 0, success: 0, error: 0 },
+      validator: { running: 0, success: 0, error: 0 },
+    };
 
-    steps.forEach(step => {
+    steps.forEach((step, stepId) => {
       total++;
-      if (step.status === 'running') running++;
-      if (step.status === 'success') success++;
-      if (step.status === 'error') error++;
+      const role = classifyStep(step);
+      
+      roleSteps[role].push(stepId);
+      roleSteps.all.push(stepId);
+      
+      if (step.status === 'running') {
+        running++;
+        roleStats[role].running++;
+        roleStats.all.running++;
+      }
+      if (step.status === 'success') {
+        success++;
+        roleStats[role].success++;
+        roleStats.all.success++;
+      }
+      if (step.status === 'error') {
+        error++;
+        roleStats[role].error++;
+        roleStats.all.error++;
+      }
       if (step.duration) totalDuration += step.duration;
     });
 
-    return { total, running, success, error, totalDuration };
+    return { 
+      stats: { total, running, success, error, totalDuration },
+      roleStats,
+      roleSteps,
+    };
   }, [steps]);
+  
+  // Get filtered root step IDs based on active role
+  const filteredRootStepIds = useMemo(() => {
+    if (activeRole === 'all') return rootStepIds;
+    
+    return rootStepIds.filter(id => {
+      const step = steps.get(id);
+      if (!step) return false;
+      return classifyStep(step) === activeRole;
+    });
+  }, [rootStepIds, steps, activeRole]);
 
   const formatDuration = (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
@@ -101,6 +227,15 @@ export function ExecutionTimeline({
       </Card>
     );
   }
+
+  // Get role counts for tab badges
+  const getRoleBadge = (role: AgentRole) => {
+    const rs = roleStats[role];
+    if (rs.running > 0) return <Badge variant="default" className="ml-1 px-1.5 h-4 text-[10px] bg-primary animate-pulse">{rs.running}</Badge>;
+    if (rs.error > 0) return <Badge variant="destructive" className="ml-1 px-1.5 h-4 text-[10px]">{rs.error}</Badge>;
+    if (rs.success > 0) return <Badge variant="secondary" className="ml-1 px-1.5 h-4 text-[10px]">{rs.success}</Badge>;
+    return null;
+  };
 
   return (
     <Card className={cn('bg-card/50 backdrop-blur', className)}>
@@ -163,13 +298,47 @@ export function ExecutionTimeline({
       </CardHeader>
       
       <CardContent className="p-0">
-        <ScrollArea style={{ maxHeight }} className="min-h-[200px]">
-          <div className="p-4 space-y-2">
-            {rootStepIds.map((stepId, index) =>
-              renderStep(stepId, 0, index, rootStepIds.length)
-            )}
+        {/* Agent Role Tabs - Cursor 2.0 Style */}
+        <Tabs value={activeRole} onValueChange={(v) => setActiveRole(v as AgentRole)} className="w-full">
+          <div className="border-b border-border/50 px-4 pt-3">
+            <TabsList className="h-8 bg-transparent p-0 gap-1">
+              {(Object.entries(ROLE_CONFIG) as [AgentRole, typeof ROLE_CONFIG[AgentRole]][]).map(([role, config]) => (
+                <TabsTrigger 
+                  key={role}
+                  value={role}
+                  className={cn(
+                    "h-7 px-3 text-xs gap-1.5 rounded-full data-[state=active]:shadow-sm",
+                    "data-[state=active]:bg-primary/10 data-[state=active]:text-primary",
+                    role !== 'all' && `data-[state=active]:${config.color}`
+                  )}
+                >
+                  {config.icon}
+                  <span className="hidden sm:inline">{config.label}</span>
+                  {getRoleBadge(role)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
           </div>
-        </ScrollArea>
+          
+          <TabsContent value={activeRole} className="m-0">
+            <ScrollArea style={{ maxHeight }} className="min-h-[200px]">
+              <div className="p-4 space-y-2">
+                {filteredRootStepIds.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <div className={cn("mb-2", ROLE_CONFIG[activeRole].color)}>
+                      {ROLE_CONFIG[activeRole].icon}
+                    </div>
+                    <p className="text-sm">No {ROLE_CONFIG[activeRole].label.toLowerCase()} steps yet</p>
+                  </div>
+                ) : (
+                  filteredRootStepIds.map((stepId, index) =>
+                    renderStep(stepId, 0, index, filteredRootStepIds.length)
+                  )
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

@@ -22,6 +22,17 @@ const FALLBACK_ERROR_PATTERNS = [
   'unavailable',
   'temporarily',
   'timeout',
+  'terminated',
+  'aborted',
+  'network',
+  'connection',
+  'econnreset',
+  'socket hang up',
+  'fetch failed',
+  '500',
+  '502',
+  '503',
+  '504',
 ];
 
 /**
@@ -67,23 +78,37 @@ export async function withGrokFallback<T>(
   const primaryModel = MODELS.ORCHESTRATOR.primary;
   const fallbackModel = MODELS.ORCHESTRATOR.fallback;
   
+  let lastError: unknown;
+  
+  // Try primary model
   try {
     logModelUsage(agent, task, primaryModel);
     return await operation(primaryModel);
   } catch (error) {
-    // Check if this error warrants a fallback
-    if (shouldFallback(error)) {
-      console.warn(
-        `[Model] ${agent}.${task}: Grok free tier failed, falling back to paid tier`,
-        error instanceof Error ? error.message : error
-      );
-      
-      logModelUsage(agent, task, fallbackModel);
-      return await operation(fallbackModel);
-    }
+    lastError = error;
+    console.warn(
+      `[Model] ${agent}.${task}: Primary model (${primaryModel}) failed:`,
+      error instanceof Error ? error.message : error
+    );
+  }
+  
+  // Try fallback model
+  try {
+    console.log(`[Model] ${agent}.${task}: Trying fallback model (${fallbackModel})`);
+    logModelUsage(agent, task, fallbackModel);
+    return await operation(fallbackModel);
+  } catch (error) {
+    console.error(
+      `[Model] ${agent}.${task}: Fallback model also failed:`,
+      error instanceof Error ? error.message : error
+    );
     
-    // Re-throw errors that shouldn't trigger fallback
-    throw error;
+    // Throw the original error with more context
+    const originalMessage = lastError instanceof Error ? lastError.message : String(lastError);
+    const fallbackMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `AI model call failed. Primary: ${originalMessage}. Fallback: ${fallbackMessage}`
+    );
   }
 }
 

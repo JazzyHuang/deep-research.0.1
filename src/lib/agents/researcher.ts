@@ -6,7 +6,7 @@ import { contentExtractor, formatPapersForContext } from '@/lib/content-extracto
 import type { Paper, DataSourceName } from '@/types/paper';
 import { DataAvailability, getDataAvailabilityLabel } from '@/types/paper';
 import type { SearchQuery, SearchRound } from '@/types/research';
-import { openrouter, MODELS, withGrokFallback } from '@/lib/models';
+import { openrouter, MODELS, withGrokFallbackAndRetry } from '@/lib/models';
 
 const PaperRelevanceSchema = z.object({
   paperId: z.string(),
@@ -203,7 +203,7 @@ export async function shouldContinueSearching(
 
   if (totalRelevantPapers < 3 && completedRounds.length < 3) {
     // Need more papers, use Grok to generate a new query
-    const result = await withGrokFallback(
+    const result = await withGrokFallbackAndRetry(
       async (modelId) => {
         const { object } = await generateObject({
           model: openrouter(modelId),
@@ -226,7 +226,8 @@ Should we continue searching? If yes, suggest a different search approach.`,
         return object;
       },
       'Researcher',
-      'shouldContinueSearching'
+      'shouldContinueSearching',
+      2 // maxRetries
     );
 
     return result;

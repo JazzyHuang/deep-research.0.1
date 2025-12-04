@@ -433,7 +433,25 @@ export async function POST(req: Request) {
             }
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          // Provide user-friendly error messages
+          let errorMessage: string;
+          if (error instanceof Error) {
+            const msg = error.message.toLowerCase();
+            if (msg.includes('terminated') || msg.includes('aborted')) {
+              errorMessage = '研究过程被中断，请刷新页面重新开始';
+            } else if (msg.includes('timeout')) {
+              errorMessage = '请求超时，请稍后重试';
+            } else if (msg.includes('api key') || msg.includes('unauthorized')) {
+              errorMessage = 'API 配置错误，请联系管理员';
+            } else {
+              errorMessage = error.message;
+            }
+            console.error('[Sessions API] Error:', error.message, error.stack);
+          } else {
+            errorMessage = 'Unknown error occurred';
+            console.error('[Sessions API] Unknown error:', error);
+          }
+          
           sessionManager.setError(finalSessionId, errorMessage);
           sendEvent({ type: 'session_error', error: errorMessage });
         } finally {

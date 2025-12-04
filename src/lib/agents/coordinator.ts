@@ -16,7 +16,7 @@ import type {
   AgentStepLog,
   createAgentStep,
 } from '@/types/research';
-import { createResearchPlan, refineSearchQuery } from './planner';
+import { createResearchPlan, refineSearchQuery, refinePlanFromFeedback, type CriticFeedbackContext } from './planner';
 import { executeSearchRound, shouldContinueSearching } from './researcher';
 import { generateReport, generateStyledReferenceList } from './writer';
 import { evaluateQuality, type QualityGateConfig } from './quality-gate';
@@ -30,7 +30,7 @@ import {
 } from '@/lib/context';
 import { ResearchMemory } from '@/lib/context/memory';
 import { dataSourceAggregator } from '@/lib/data-sources';
-import { openrouter, withGrokFallback } from '@/lib/models';
+import { openrouter, withGrokFallbackAndRetry } from '@/lib/models';
 
 // Helper to generate unique step IDs
 let stepCounter = 0;
@@ -700,8 +700,8 @@ export async function* coordinateResearch(
           message: `Iteration ${iterationCount} complete. Score: ${qualityResult.analysis.overallScore}/100. Starting iteration ${iterationCount + 1}...` 
         };
         
-        // If there are suggested searches, do additional searching
-        if (qualityResult.analysis.suggestedSearches && qualityResult.analysis.suggestedSearches.length > 0) {
+        // Use Critic feedback to refine the research plan and conduct targeted searches
+        if (qualityResult.analysis.gapsIdentified.length > 0 || qualityResult.analysis.overallScore < 80) {
           currentState = 'searching';
           
           const gapSearchStepId = generateStepId(`gap-search-${iterationCount}`);
@@ -711,8 +711,8 @@ export async function* coordinateResearch(
               id: gapSearchStepId,
               type: 'search',
               name: 'gap_filling_search',
-              title: 'Additional Search for Gaps',
-              description: 'Searching for papers to fill identified knowledge gaps',
+              title: 'Targeted Gap-Filling Search',
+              description: 'Refining plan and searching for papers to fill identified knowledge gaps',
               status: 'running',
               startTime: Date.now(),
               logs: [],
@@ -721,29 +721,100 @@ export async function* coordinateResearch(
             },
           };
           
-          yield { type: 'status', status: 'searching', message: 'Conducting additional searches to fill gaps...' };
+          yield { type: 'status', status: 'searching', message: 'Analyzing gaps and refining research plan...' };
           
+          // Build critic feedback context for plan refinement
+          const criticFeedbackContext: CriticFeedbackContext = {
+            gapsIdentified: qualityResult.analysis.gapsIdentified,
+            weaknesses: qualityResult.analysis.weaknesses,
+            overallScore: qualityResult.analysis.overallScore,
+            coverageScore: qualityResult.analysis.coverageScore,
+            feedback: qualityResult.analysis.feedback,
+          };
+          
+          // Refine the plan based on critic feedback
+          yield {
+            type: 'agent_step_log',
+            stepId: gapSearchStepId,
+            log: createLog('info', 'Generating refined search strategies from critic feedback...'),
+          };
+          
+          const planRefinement = await refinePlanFromFeedback(
+            plan,
+            criticFeedbackContext,
+            memory.papers.map(p => p.title)
+          );
+          
+          yield {
+            type: 'agent_step_log',
+            stepId: gapSearchStepId,
+            log: createLog('info', `Plan refinement: ${planRefinement.additionalSearchStrategies.length} new searches, ${planRefinement.additionalSubQuestions.length} new sub-questions`),
+          };
+          
+          // Add new sub-questions to memory
+          for (const subQ of planRefinement.additionalSubQuestions) {
+            plan.subQuestions.push(subQ);
+            yield { 
+              type: 'analysis', 
+              insight: `New sub-question added: ${subQ}` 
+            };
+          }
+          
+          // Execute targeted searches from the refined plan
           let additionalPapersFound = 0;
-          for (const searchQuery of qualityResult.analysis.suggestedSearches.slice(0, 2)) {
+          const searchesToExecute: Array<{ query: string; filters?: { yearFrom?: number; yearTo?: number; openAccess?: boolean } }> = 
+            planRefinement.additionalSearchStrategies.length > 0
+              ? planRefinement.additionalSearchStrategies
+              : (qualityResult.analysis.suggestedSearches || []).slice(0, 2).map(q => ({ query: q }));
+          
+          for (const searchStrategy of searchesToExecute.slice(0, 3)) {
             yield {
               type: 'agent_step_log',
               stepId: gapSearchStepId,
-              log: createLog('info', `Searching: ${searchQuery}`),
+              log: createLog('info', `Targeted search: ${searchStrategy.query}`),
             };
             
+            yield { type: 'status', status: 'searching', message: `Searching: ${searchStrategy.query.slice(0, 50)}...` };
+            
             const additionalResult = await dataSourceAggregator.search({
-              query: searchQuery,
+              query: searchStrategy.query,
               limit: 10,
+              yearFrom: searchStrategy.filters?.yearFrom,
+              yearTo: searchStrategy.filters?.yearTo,
+              openAccess: searchStrategy.filters?.openAccess,
             });
             
             if (additionalResult.papers.length > 0) {
-              memory.addPapers(additionalResult.papers);
-              additionalPapersFound += additionalResult.papers.length;
-              yield { 
-                type: 'papers_found', 
-                papers: additionalResult.papers.slice(0, 5), 
-                round: memory.searchRounds.length + 1 
-              };
+              // Deduplicate against existing papers
+              const newPapers = additionalResult.papers.filter(p => 
+                !memory.papers.some(existing => 
+                  existing.doi === p.doi || existing.title.toLowerCase() === p.title.toLowerCase()
+                )
+              );
+              
+              if (newPapers.length > 0) {
+                memory.addPapers(newPapers);
+                additionalPapersFound += newPapers.length;
+                
+                yield { 
+                  type: 'papers_found', 
+                  papers: newPapers.slice(0, 5), 
+                  round: memory.searchRounds.length + 1 
+                };
+                
+                yield {
+                  type: 'agent_step_log',
+                  stepId: gapSearchStepId,
+                  log: createLog('info', `Found ${newPapers.length} new papers for gap: ${searchStrategy.query.slice(0, 40)}...`),
+                };
+              }
+            }
+          }
+          
+          // Mark addressed gaps
+          for (const [gap, queries] of planRefinement.gapMappings) {
+            if (additionalPapersFound > 0) {
+              memory.addInsight(`Gap "${gap}" addressed with ${queries.length} targeted searches`);
             }
           }
           
@@ -752,8 +823,13 @@ export async function* coordinateResearch(
             stepId: gapSearchStepId,
             status: 'success',
             output: {
-              summary: `Found ${additionalPapersFound} additional papers`,
-              result: { papersFound: additionalPapersFound },
+              summary: `Found ${additionalPapersFound} additional papers through targeted gap-filling`,
+              result: { 
+                papersFound: additionalPapersFound,
+                searchesExecuted: searchesToExecute.slice(0, 3).length,
+                newSubQuestions: planRefinement.additionalSubQuestions.length,
+                reasoning: planRefinement.reasoning.slice(0, 200),
+              },
             },
           };
         }
@@ -896,7 +972,32 @@ export async function* coordinateResearch(
 
   } catch (error) {
     currentState = 'error';
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
+    // Provide more helpful error messages
+    let errorMessage: string;
+    if (error instanceof Error) {
+      // Check for common error types and provide user-friendly messages
+      const msg = error.message.toLowerCase();
+      if (msg.includes('terminated') || msg.includes('aborted')) {
+        errorMessage = '研究过程被中断，请重新开始';
+      } else if (msg.includes('timeout') || msg.includes('timed out')) {
+        errorMessage = 'AI 模型响应超时，请稍后重试';
+      } else if (msg.includes('rate limit') || msg.includes('429')) {
+        errorMessage = 'API 调用频率限制，请稍后重试';
+      } else if (msg.includes('api key') || msg.includes('unauthorized') || msg.includes('401')) {
+        errorMessage = 'API 密钥配置错误，请检查 OPENROUTER_API_KEY 环境变量';
+      } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('connection')) {
+        errorMessage = '网络连接失败，请检查网络后重试';
+      } else {
+        errorMessage = error.message;
+      }
+      
+      // Log the full error for debugging
+      console.error('[Coordinator] Error:', error.message, error.stack);
+    } else {
+      errorMessage = 'Unknown error occurred';
+      console.error('[Coordinator] Unknown error:', error);
+    }
     
     // Emit error step
     yield {
@@ -933,7 +1034,7 @@ export async function decideNextStep(
   maxIterations: number,
 ): Promise<WorkflowDecision> {
   // Use Grok 4.1 Fast with fallback for workflow orchestration
-  const result = await withGrokFallback(
+  const result = await withGrokFallbackAndRetry(
     async (modelId) => {
       const { object } = await generateObject({
         model: openrouter(modelId),
@@ -970,7 +1071,8 @@ Decide:
       return object;
     },
     'Coordinator',
-    'decideNextStep'
+    'decideNextStep',
+    2 // maxRetries
   );
 
   return {

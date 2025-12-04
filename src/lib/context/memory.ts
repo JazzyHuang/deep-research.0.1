@@ -8,6 +8,45 @@ import type {
 } from '@/types/research';
 
 /**
+ * Processed topic tracking to avoid duplicate content
+ */
+export interface ProcessedTopic {
+  topic: string;
+  searchQueries: string[];
+  paperIds: string[];
+  coverage: number; // 0-100 how well covered
+  iteration: number;
+  timestamp: Date;
+}
+
+/**
+ * Embedding summary for semantic retrieval
+ */
+export interface EmbeddingSummary {
+  id: string;
+  type: 'finding' | 'gap' | 'insight' | 'paper_summary';
+  content: string;
+  embedding?: number[]; // Vector embedding for semantic search
+  sourceIds: string[]; // Paper IDs or other sources
+  relevanceScore?: number;
+  timestamp: Date;
+}
+
+/**
+ * Gap tracking with status
+ */
+export interface TrackedGap {
+  id: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'addressed' | 'wont_fix';
+  searchesAttempted: string[];
+  papersFound: string[];
+  iteration: number;
+  addressedIteration?: number;
+  notes?: string;
+}
+
+/**
  * Research memory for maintaining context across iterations
  */
 export interface ResearchMemoryState {
@@ -29,6 +68,12 @@ export interface ResearchMemoryState {
   iteration: number;
   startTime: Date;
   lastUpdateTime: Date;
+  
+  // Enhanced memory features
+  processedTopics: Map<string, ProcessedTopic>;
+  embeddingSummaries: Map<string, EmbeddingSummary>;
+  trackedGaps: Map<string, TrackedGap>;
+  topicCoverage: Map<string, number>; // topic -> coverage percentage
 }
 
 /**
@@ -51,6 +96,11 @@ export class ResearchMemory {
       iteration: 0,
       startTime: new Date(),
       lastUpdateTime: new Date(),
+      // Enhanced memory features
+      processedTopics: new Map(),
+      embeddingSummaries: new Map(),
+      trackedGaps: new Map(),
+      topicCoverage: new Map(),
     };
   }
 
@@ -182,14 +232,278 @@ export class ResearchMemory {
   }
 
   /**
-   * Mark a gap as addressed
+   * Mark a gap as addressed (legacy method)
    */
   resolveGap(gap: string): void {
     const index = this.state.gaps.indexOf(gap);
     if (index !== -1) {
       this.state.gaps.splice(index, 1);
     }
+    
+    // Also update tracked gap if exists
+    for (const [id, trackedGap] of this.state.trackedGaps) {
+      if (trackedGap.description === gap) {
+        trackedGap.status = 'addressed';
+        trackedGap.addressedIteration = this.state.iteration;
+        break;
+      }
+    }
+    
     this.touch();
+  }
+  
+  // ============================================
+  // Enhanced Memory Features
+  // ============================================
+  
+  /**
+   * Track a processed topic to avoid duplicate searches
+   */
+  trackProcessedTopic(
+    topic: string,
+    searchQuery: string,
+    paperIds: string[],
+    coverage: number = 50
+  ): void {
+    const normalizedTopic = topic.toLowerCase().trim();
+    const existing = this.state.processedTopics.get(normalizedTopic);
+    
+    if (existing) {
+      // Update existing topic
+      if (!existing.searchQueries.includes(searchQuery)) {
+        existing.searchQueries.push(searchQuery);
+      }
+      existing.paperIds = [...new Set([...existing.paperIds, ...paperIds])];
+      existing.coverage = Math.max(existing.coverage, coverage);
+      existing.iteration = this.state.iteration;
+    } else {
+      // Create new topic tracking
+      this.state.processedTopics.set(normalizedTopic, {
+        topic: normalizedTopic,
+        searchQueries: [searchQuery],
+        paperIds,
+        coverage,
+        iteration: this.state.iteration,
+        timestamp: new Date(),
+      });
+    }
+    
+    this.state.topicCoverage.set(normalizedTopic, 
+      Math.max(this.state.topicCoverage.get(normalizedTopic) || 0, coverage)
+    );
+    
+    this.touch();
+  }
+  
+  /**
+   * Check if a topic has already been processed
+   */
+  isTopicProcessed(topic: string, minCoverage: number = 50): boolean {
+    const normalizedTopic = topic.toLowerCase().trim();
+    const processed = this.state.processedTopics.get(normalizedTopic);
+    return processed !== undefined && processed.coverage >= minCoverage;
+  }
+  
+  /**
+   * Get topics that need more coverage
+   */
+  getUncoveredTopics(threshold: number = 70): ProcessedTopic[] {
+    return Array.from(this.state.processedTopics.values())
+      .filter(t => t.coverage < threshold)
+      .sort((a, b) => a.coverage - b.coverage);
+  }
+  
+  /**
+   * Store an embedding summary for semantic retrieval
+   */
+  addEmbeddingSummary(
+    type: EmbeddingSummary['type'],
+    content: string,
+    sourceIds: string[],
+    embedding?: number[]
+  ): string {
+    const id = `emb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    
+    this.state.embeddingSummaries.set(id, {
+      id,
+      type,
+      content,
+      embedding,
+      sourceIds,
+      timestamp: new Date(),
+    });
+    
+    this.touch();
+    return id;
+  }
+  
+  /**
+   * Get embedding summaries by type
+   */
+  getEmbeddingSummaries(type?: EmbeddingSummary['type']): EmbeddingSummary[] {
+    const summaries = Array.from(this.state.embeddingSummaries.values());
+    return type ? summaries.filter(s => s.type === type) : summaries;
+  }
+  
+  /**
+   * Add a tracked gap with status
+   */
+  addTrackedGap(description: string, notes?: string): string {
+    const id = `gap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    
+    // Also add to legacy gaps array for backward compatibility
+    if (!this.state.gaps.includes(description)) {
+      this.state.gaps.push(description);
+    }
+    
+    this.state.trackedGaps.set(id, {
+      id,
+      description,
+      status: 'open',
+      searchesAttempted: [],
+      papersFound: [],
+      iteration: this.state.iteration,
+      notes,
+    });
+    
+    this.touch();
+    return id;
+  }
+  
+  /**
+   * Update gap status and record search attempts
+   */
+  updateGapStatus(
+    gapId: string,
+    status: TrackedGap['status'],
+    searchQuery?: string,
+    papersFound?: string[]
+  ): void {
+    const gap = this.state.trackedGaps.get(gapId);
+    if (!gap) return;
+    
+    gap.status = status;
+    
+    if (searchQuery && !gap.searchesAttempted.includes(searchQuery)) {
+      gap.searchesAttempted.push(searchQuery);
+    }
+    
+    if (papersFound) {
+      gap.papersFound = [...new Set([...gap.papersFound, ...papersFound])];
+    }
+    
+    if (status === 'addressed') {
+      gap.addressedIteration = this.state.iteration;
+      
+      // Remove from legacy gaps array
+      const index = this.state.gaps.indexOf(gap.description);
+      if (index !== -1) {
+        this.state.gaps.splice(index, 1);
+      }
+    }
+    
+    this.touch();
+  }
+  
+  /**
+   * Get open gaps that need attention
+   */
+  getOpenGaps(): TrackedGap[] {
+    return Array.from(this.state.trackedGaps.values())
+      .filter(g => g.status === 'open' || g.status === 'in_progress');
+  }
+  
+  /**
+   * Get relevant context for the next iteration
+   * Prioritizes recent insights, open gaps, and uncovered topics
+   */
+  getRelevantContext(maxTokens: number = 2000): {
+    summary: string;
+    keyFindings: string[];
+    openGaps: TrackedGap[];
+    uncoveredTopics: ProcessedTopic[];
+    recentInsights: string[];
+  } {
+    const openGaps = this.getOpenGaps();
+    const uncoveredTopics = this.getUncoveredTopics();
+    const recentInsights = this.state.insights.slice(-10);
+    
+    // Get key findings from embedding summaries
+    const keyFindings = this.getEmbeddingSummaries('finding')
+      .slice(-10)
+      .map(s => s.content);
+    
+    // Build summary
+    let summary = `Research Progress Summary (Iteration ${this.state.iteration}):\n`;
+    summary += `- Papers collected: ${this.state.papers.size}\n`;
+    summary += `- Open gaps: ${openGaps.length}\n`;
+    summary += `- Uncovered topics: ${uncoveredTopics.length}\n`;
+    
+    if (openGaps.length > 0) {
+      summary += `\nOpen Gaps to Address:\n`;
+      openGaps.slice(0, 5).forEach(g => {
+        summary += `- ${g.description} (${g.searchesAttempted.length} searches attempted)\n`;
+      });
+    }
+    
+    if (uncoveredTopics.length > 0) {
+      summary += `\nTopics Needing More Coverage:\n`;
+      uncoveredTopics.slice(0, 5).forEach(t => {
+        summary += `- ${t.topic} (${t.coverage}% covered)\n`;
+      });
+    }
+    
+    if (recentInsights.length > 0) {
+      summary += `\nRecent Insights:\n`;
+      recentInsights.slice(-5).forEach(i => {
+        summary += `- ${i}\n`;
+      });
+    }
+    
+    return {
+      summary,
+      keyFindings,
+      openGaps,
+      uncoveredTopics,
+      recentInsights,
+    };
+  }
+  
+  /**
+   * Check if a search query is redundant
+   */
+  isSearchRedundant(query: string): boolean {
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    // Check if this exact query was used before
+    for (const round of this.state.searchRounds) {
+      if (round.query.toLowerCase().trim() === normalizedQuery) {
+        return true;
+      }
+    }
+    
+    // Check if topic was already well-covered
+    const words = normalizedQuery.split(/\s+/).filter(w => w.length > 3);
+    for (const word of words) {
+      if (this.isTopicProcessed(word, 80)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Get gaps that haven't been adequately addressed
+   */
+  getUnaddressedGaps(): string[] {
+    const addressed = new Set(
+      Array.from(this.state.trackedGaps.values())
+        .filter(g => g.status === 'addressed')
+        .map(g => g.description)
+    );
+    
+    return this.state.gaps.filter(g => !addressed.has(g));
   }
 
   /**
@@ -266,6 +580,10 @@ export class ResearchMemory {
       ...this.state,
       papers: Array.from(this.state.papers.entries()),
       citations: Array.from(this.state.citations.entries()),
+      processedTopics: Array.from(this.state.processedTopics.entries()),
+      embeddingSummaries: Array.from(this.state.embeddingSummaries.entries()),
+      trackedGaps: Array.from(this.state.trackedGaps.entries()),
+      topicCoverage: Array.from(this.state.topicCoverage.entries()),
     };
   }
 
@@ -287,6 +605,10 @@ export class ResearchMemory {
       iteration: number;
       startTime: string | Date;
       lastUpdateTime: string | Date;
+      processedTopics?: [string, ProcessedTopic][];
+      embeddingSummaries?: [string, EmbeddingSummary][];
+      trackedGaps?: [string, TrackedGap][];
+      topicCoverage?: [string, number][];
     };
     
     memory.state = {
@@ -302,6 +624,11 @@ export class ResearchMemory {
       iteration: imported.iteration,
       startTime: new Date(imported.startTime),
       lastUpdateTime: new Date(imported.lastUpdateTime),
+      // Enhanced memory features (with defaults for backward compatibility)
+      processedTopics: new Map(imported.processedTopics || []),
+      embeddingSummaries: new Map(imported.embeddingSummaries || []),
+      trackedGaps: new Map(imported.trackedGaps || []),
+      topicCoverage: new Map(imported.topicCoverage || []),
     };
     
     return memory;

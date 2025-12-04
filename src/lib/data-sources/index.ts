@@ -12,6 +12,7 @@ import { OpenAlexClient, openAlex } from './openalex';
 import { ArxivClient, arxiv } from './arxiv';
 import { PubMedClient, pubmed } from './pubmed';
 import { CoreClient, core } from './core';
+import { queryCache } from './cache';
 
 // Re-export types and clients
 export * from './types';
@@ -21,7 +22,17 @@ export { ArxivClient, arxiv } from './arxiv';
 export { PubMedClient, pubmed } from './pubmed';
 export { CoreClient, core } from './core';
 export { PaperEnricher, paperEnricher, enrichPaper, enrichPapers, getPaperSection, getPaperSections } from './enricher';
-export { PaperCache, paperCache, withCache, withBatchCache, type CacheStats, type CacheConfig } from './cache';
+export { 
+  PaperCache, 
+  paperCache, 
+  withCache, 
+  withBatchCache, 
+  QueryCache,
+  queryCache,
+  type CacheStats, 
+  type CacheConfig,
+  type QueryCacheConfig,
+} from './cache';
 
 export interface AggregatorConfig {
   enabledSources?: DataSourceName[];
@@ -38,10 +49,156 @@ export interface AggregatorConfig {
   // Fallback configuration
   fallbackOnAllFail?: boolean;
   minSuccessfulSources?: number;
+  // Smart source selection
+  enableSmartSourceSelection?: boolean;
+}
+
+/**
+ * Domain classification for smart source selection
+ */
+export type QueryDomain = 'biomedical' | 'cs_ai' | 'physics_math' | 'general';
+
+/**
+ * Domain keyword patterns for classification
+ */
+const DOMAIN_PATTERNS: Record<QueryDomain, RegExp[]> = {
+  biomedical: [
+    /\b(medic|clinic|patient|disease|drug|pharma|health|cancer|tumor|cell|gene|protein|dna|rna|virus|bacteria|immun|neuro|cardio|brain|blood|liver|kidney|lung|surgery|therapy|diagnosis|symptom|treatment|patholog|oncolog|epidem|vaccine|antibiot|hospital|physician)/i,
+    /\b(covid|sars|influenza|diabetes|alzheimer|parkinson|stroke|heart\s*attack|hypertension|asthma|arthritis|obesity)/i,
+  ],
+  cs_ai: [
+    /\b(machine\s*learning|deep\s*learning|neural\s*network|artificial\s*intelligence|nlp|natural\s*language|computer\s*vision|reinforcement\s*learning|transformer|bert|gpt|llm|large\s*language\s*model)/i,
+    /\b(algorithm|software|programming|database|network|cyber|crypto|blockchain|cloud|distributed|parallel|concurrent|compiler|operating\s*system)/i,
+    /\b(robot|autonom|perception|planning|optimization|classification|clustering|regression|embedding|attention\s*mechanism)/i,
+  ],
+  physics_math: [
+    /\b(quantum|relativity|particle|photon|electron|proton|neutron|boson|fermion|quark|string\s*theory|cosmolog|astrophys|gravit)/i,
+    /\b(theorem|proof|conjecture|topology|algebra|calculus|differential\s*equation|stochastic|probability|statistic|linear\s*algebra|manifold)/i,
+    /\b(physics|mathematical|mechanics|thermodynamics|electromagnetism|optics|semiconductor|superconductor)/i,
+  ],
+  general: [], // Fallback domain
+};
+
+/**
+ * Optimal source configuration per domain
+ */
+const DOMAIN_SOURCE_PRIORITY: Record<QueryDomain, DataSourceName[]> = {
+  biomedical: ['pubmed', 'semantic-scholar', 'openalex'],
+  cs_ai: ['semantic-scholar', 'arxiv', 'openalex'],
+  physics_math: ['arxiv', 'openalex', 'semantic-scholar'],
+  general: ['openalex', 'semantic-scholar', 'core'],
+};
+
+/**
+ * Calculate Levenshtein distance between two strings
+ * Used for fuzzy title matching in deduplication
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  
+  // Create a 2D array for dynamic programming
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  
+  // Initialize base cases
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  
+  // Fill in the rest of the matrix
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(
+          dp[i - 1][j],      // deletion
+          dp[i][j - 1],      // insertion
+          dp[i - 1][j - 1]   // substitution
+        );
+      }
+    }
+  }
+  
+  return dp[m][n];
+}
+
+/**
+ * Calculate similarity ratio between two strings (0-1)
+ * 1 = identical, 0 = completely different
+ */
+export function calculateTitleSimilarity(title1: string, title2: string): number {
+  const normalized1 = title1.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const normalized2 = title2.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  
+  if (normalized1 === normalized2) return 1;
+  if (normalized1.length === 0 || normalized2.length === 0) return 0;
+  
+  const distance = levenshteinDistance(normalized1, normalized2);
+  const maxLength = Math.max(normalized1.length, normalized2.length);
+  
+  return 1 - (distance / maxLength);
+}
+
+/**
+ * Check if two titles are similar enough to be considered duplicates
+ */
+export function areTitlesSimilar(title1: string, title2: string, threshold: number = 0.85): boolean {
+  return calculateTitleSimilarity(title1, title2) >= threshold;
+}
+
+/**
+ * Classify query into a domain based on keyword patterns
+ */
+export function classifyQueryDomain(query: string): QueryDomain {
+  const normalizedQuery = query.toLowerCase();
+  
+  // Score each domain
+  const scores: Record<QueryDomain, number> = {
+    biomedical: 0,
+    cs_ai: 0,
+    physics_math: 0,
+    general: 0,
+  };
+  
+  for (const [domain, patterns] of Object.entries(DOMAIN_PATTERNS) as [QueryDomain, RegExp[]][]) {
+    for (const pattern of patterns) {
+      const matches = normalizedQuery.match(pattern);
+      if (matches) {
+        scores[domain] += matches.length;
+      }
+    }
+  }
+  
+  // Find highest scoring domain
+  let maxScore = 0;
+  let bestDomain: QueryDomain = 'general';
+  
+  for (const [domain, score] of Object.entries(scores) as [QueryDomain, number][]) {
+    if (score > maxScore) {
+      maxScore = score;
+      bestDomain = domain;
+    }
+  }
+  
+  return bestDomain;
+}
+
+/**
+ * Select optimal data sources based on query domain
+ */
+export function selectSourcesForQuery(
+  query: string,
+  maxSources: number = 3,
+): DataSourceName[] {
+  const domain = classifyQueryDomain(query);
+  const prioritySources = DOMAIN_SOURCE_PRIORITY[domain];
+  
+  // Return top N sources for this domain
+  return prioritySources.slice(0, maxSources);
 }
 
 const DEFAULT_CONFIG: AggregatorConfig = {
-  enabledSources: ['semantic-scholar', 'openalex', 'core'],
+  enabledSources: ['openalex', 'semantic-scholar', 'core'],
   maxResultsPerSource: 15,
   timeout: 30000,
   deduplicateByDoi: true,
@@ -55,6 +212,8 @@ const DEFAULT_CONFIG: AggregatorConfig = {
   // Fallback defaults
   fallbackOnAllFail: true,
   minSuccessfulSources: 1,
+  // Smart source selection (enabled by default)
+  enableSmartSourceSelection: true,
 };
 
 // Error tracking for monitoring
@@ -209,9 +368,41 @@ export class DataSourceAggregator {
 
   /**
    * Search across multiple data sources in parallel with retry and fallback
+   * Supports smart source selection based on query domain and query caching
    */
-  async search(options: SearchOptions): Promise<AggregatedSearchResult> {
-    const enabledSources = this.config.enabledSources || [];
+  async search(options: SearchOptions & { sessionId?: string }): Promise<AggregatedSearchResult> {
+    // Check query cache first
+    const cachedResult = queryCache.get(
+      options.query,
+      { yearFrom: options.yearFrom, yearTo: options.yearTo, openAccess: options.openAccess },
+      options.sessionId
+    );
+    
+    if (cachedResult) {
+      console.log(`[DataSourceAggregator] Cache hit for query: "${options.query.slice(0, 50)}..."`);
+      return {
+        papers: cachedResult.papers,
+        totalHits: cachedResult.totalHits,
+        sourceBreakdown: cachedResult.sourceBreakdown as Record<DataSourceName, number>,
+        dedupedCount: 0,
+        metadata: {
+          successfulSources: Object.keys(cachedResult.sourceBreakdown) as DataSourceName[],
+          failedSources: [],
+          searchTime: Date.now(),
+          fromCache: true,
+        },
+      } as AggregatedSearchResult;
+    }
+    
+    // Use smart source selection if enabled
+    let enabledSources = this.config.enabledSources || [];
+    
+    if (this.config.enableSmartSourceSelection && options.query) {
+      const smartSources = selectSourcesForQuery(options.query, 3);
+      enabledSources = smartSources;
+      console.log(`[DataSourceAggregator] Smart source selection: ${classifyQueryDomain(options.query)} → [${smartSources.join(', ')}]`);
+    }
+    
     const maxPerSource = this.config.maxResultsPerSource || 15;
     const maxRetries = this.config.maxRetries || 2;
 
@@ -324,7 +515,7 @@ export class DataSourceAggregator {
     // Sort results
     filteredPapers = this.sortPapers(filteredPapers, this.config.sortBy || 'citations');
 
-    return {
+    const result = {
       papers: filteredPapers,
       totalHits,
       sourceBreakdown,
@@ -334,12 +525,24 @@ export class DataSourceAggregator {
         successfulSources: successfulResults.map(r => r.source),
         failedSources: failedResults.map(r => ({ source: r.source, error: r.error })),
         searchTime: Date.now(),
+        fromCache: false,
       },
     } as AggregatedSearchResult;
+    
+    // Cache the search results
+    queryCache.set(
+      options.query,
+      { papers: filteredPapers, totalHits, sourceBreakdown },
+      { yearFrom: options.yearFrom, yearTo: options.yearTo, openAccess: options.openAccess },
+      options.sessionId
+    );
+    
+    return result;
   }
 
   /**
    * Try alternative sources as fallback
+   * OpenAlex is prioritized as primary fallback due to best coverage and DOI support
    */
   private async tryFallbackSearch(options: SearchOptions): Promise<{
     status: 'success';
@@ -348,8 +551,9 @@ export class DataSourceAggregator {
     totalHits: number;
   } | null> {
     // Try sources that weren't in the primary list
+    // OpenAlex first as it has the best coverage (200M+ works)
     const primarySources = new Set(this.config.enabledSources || []);
-    const fallbackOrder: DataSourceName[] = ['openalex', 'semantic-scholar', 'arxiv', 'pubmed', 'core'];
+    const fallbackOrder: DataSourceName[] = ['openalex', 'semantic-scholar', 'core', 'arxiv', 'pubmed'];
     
     for (const sourceName of fallbackOrder) {
       if (primarySources.has(sourceName)) continue;
@@ -381,59 +585,87 @@ export class DataSourceAggregator {
   }
 
   /**
-   * Deduplicate papers by DOI and/or title similarity
+   * Deduplicate papers by DOI and/or fuzzy title similarity
+   * Uses Levenshtein distance for improved matching of similar titles
    */
   private deduplicatePapers(papers: Paper[]): { papers: Paper[]; removedCount: number } {
-    const seen = new Map<string, Paper>();
-    const seenTitles = new Map<string, Paper>();
+    const seenByDoi = new Map<string, Paper>();
+    const seenByTitle: Paper[] = [];
     let removedCount = 0;
 
     for (const paper of papers) {
-      // Check DOI deduplication
+      let isDuplicate = false;
+      
+      // Check DOI deduplication (exact match)
       if (this.config.deduplicateByDoi && paper.doi) {
         const normalizedDoi = paper.doi.toLowerCase().trim();
-        if (seen.has(normalizedDoi)) {
-          // Merge data, preferring paper with more info
-          const existing = seen.get(normalizedDoi)!;
-          seen.set(normalizedDoi, this.mergePapers(existing, paper));
+        if (seenByDoi.has(normalizedDoi)) {
+          // Merge data using field-level merge
+          const existing = seenByDoi.get(normalizedDoi)!;
+          seenByDoi.set(normalizedDoi, this.mergePapersFieldLevel(existing, paper));
           removedCount++;
+          isDuplicate = true;
           continue;
         }
-        seen.set(normalizedDoi, paper);
+        seenByDoi.set(normalizedDoi, paper);
       }
 
-      // Check title similarity deduplication
-      if (this.config.deduplicateByTitle) {
-        const normalizedTitle = this.normalizeTitle(paper.title);
-        if (seenTitles.has(normalizedTitle)) {
-          const existing = seenTitles.get(normalizedTitle)!;
-          seenTitles.set(normalizedTitle, this.mergePapers(existing, paper));
-          removedCount++;
-          continue;
+      // Check fuzzy title similarity deduplication
+      if (this.config.deduplicateByTitle && !isDuplicate) {
+        // Find similar title using fuzzy matching
+        let matchedIndex = -1;
+        
+        for (let i = 0; i < seenByTitle.length; i++) {
+          if (areTitlesSimilar(paper.title, seenByTitle[i].title, 0.85)) {
+            matchedIndex = i;
+            break;
+          }
         }
-        seenTitles.set(normalizedTitle, paper);
+        
+        if (matchedIndex >= 0) {
+          // Merge with existing paper
+          seenByTitle[matchedIndex] = this.mergePapersFieldLevel(seenByTitle[matchedIndex], paper);
+          removedCount++;
+          isDuplicate = true;
+        } else {
+          seenByTitle.push(paper);
+        }
       }
 
-      // If neither dedup method caught it, add to results
-      if (!this.config.deduplicateByDoi && !this.config.deduplicateByTitle) {
-        seen.set(paper.id, paper);
+      // If neither dedup method caught it and no title dedup, add to results
+      if (!isDuplicate && !this.config.deduplicateByDoi && !this.config.deduplicateByTitle) {
+        seenByTitle.push(paper);
       }
     }
 
-    // Combine results
+    // Combine results from DOI and title deduplication
     const uniquePapers = new Map<string, Paper>();
     
-    for (const paper of seen.values()) {
+    // Add DOI-deduplicated papers
+    for (const paper of seenByDoi.values()) {
       const key = paper.doi?.toLowerCase() || paper.id;
-      if (!uniquePapers.has(key)) {
-        uniquePapers.set(key, paper);
-      }
+      uniquePapers.set(key, paper);
     }
     
-    for (const paper of seenTitles.values()) {
-      const key = paper.doi?.toLowerCase() || this.normalizeTitle(paper.title);
+    // Add title-deduplicated papers (checking for DOI conflicts)
+    for (const paper of seenByTitle) {
+      const key = paper.doi?.toLowerCase() || `title:${this.normalizeTitle(paper.title)}`;
       if (!uniquePapers.has(key)) {
-        uniquePapers.set(key, paper);
+        // Also check fuzzy title match against DOI papers
+        let foundMatch = false;
+        for (const existing of uniquePapers.values()) {
+          if (areTitlesSimilar(paper.title, existing.title, 0.85)) {
+            // Merge into existing
+            const mergedKey = existing.doi?.toLowerCase() || existing.id;
+            uniquePapers.set(mergedKey, this.mergePapersFieldLevel(existing, paper));
+            removedCount++;
+            foundMatch = true;
+            break;
+          }
+        }
+        if (!foundMatch) {
+          uniquePapers.set(key, paper);
+        }
       }
     }
 
@@ -456,7 +688,111 @@ export class DataSourceAggregator {
   }
 
   /**
-   * Merge two papers, preferring more complete data
+   * Field-level merge of two papers
+   * Intelligently selects the best value for each field rather than whole-paper selection
+   */
+  private mergePapersFieldLevel(existing: Paper, incoming: Paper): Paper {
+    // Merge source origins (deduplicated)
+    const mergedSources = [...new Set([
+      ...(existing.sourceOrigin || []),
+      ...(incoming.sourceOrigin || []),
+    ])] as PaperSourceName[];
+    
+    // Use highest data availability
+    const existingLevel = existing.dataAvailability || DataAvailability.METADATA_ONLY;
+    const incomingLevel = incoming.dataAvailability || DataAvailability.METADATA_ONLY;
+    const mergedAvailability = Math.max(existingLevel, incomingLevel) as DataAvailability;
+    
+    // Helper: select best string value (prefer longer, non-empty)
+    const selectBestString = (a?: string, b?: string): string | undefined => {
+      if (!a && !b) return undefined;
+      if (!a) return b;
+      if (!b) return a;
+      return a.length >= b.length ? a : b;
+    };
+    
+    // Helper: merge arrays with deduplication
+    const mergeArrays = <T>(a: T[] = [], b: T[] = []): T[] => {
+      return [...new Set([...a, ...b])];
+    };
+    
+    return {
+      // Keep original ID for consistency
+      id: existing.id,
+      
+      // Select longer/better title
+      title: selectBestString(existing.title, incoming.title) || existing.title,
+      
+      // Merge author lists (by name to avoid duplicates)
+      authors: (() => {
+        const authorMap = new Map<string, { name: string; affiliations?: string[] }>();
+        for (const author of [...existing.authors, ...incoming.authors]) {
+          const key = author.name.toLowerCase();
+          const existing = authorMap.get(key);
+          if (!existing || (author.affiliations?.length || 0) > (existing.affiliations?.length || 0)) {
+            authorMap.set(key, author);
+          }
+        }
+        return Array.from(authorMap.values());
+      })(),
+      
+      // Select longer abstract (provide empty string as fallback)
+      abstract: selectBestString(existing.abstract, incoming.abstract) || '',
+      
+      // Prefer non-zero year, or newer if both valid
+      year: existing.year || incoming.year || new Date().getFullYear(),
+      publishedDate: existing.publishedDate || incoming.publishedDate,
+      
+      // Prefer existing DOI if valid
+      doi: existing.doi || incoming.doi,
+      
+      // Select best URLs
+      downloadUrl: existing.downloadUrl || incoming.downloadUrl,
+      sourceUrl: existing.sourceUrl || incoming.sourceUrl,
+      pdfUrl: existing.pdfUrl || incoming.pdfUrl,
+      
+      // Prefer existing metadata
+      journal: selectBestString(existing.journal, incoming.journal),
+      publisher: selectBestString(existing.publisher, incoming.publisher),
+      
+      // Merge subjects
+      subjects: mergeArrays(existing.subjects, incoming.subjects),
+      
+      // Use maximum citations
+      citations: Math.max(existing.citations || 0, incoming.citations || 0),
+      
+      // Prefer existing references if available
+      references: existing.references || incoming.references,
+      
+      // True if either is open access
+      openAccess: existing.openAccess || incoming.openAccess,
+      
+      // Prefer existing language
+      language: existing.language || incoming.language,
+      
+      // Select longer full text
+      fullText: selectBestString(existing.fullText, incoming.fullText),
+      
+      // Extended metadata - prefer non-empty values
+      volume: existing.volume || incoming.volume,
+      issue: existing.issue || incoming.issue,
+      pages: existing.pages || incoming.pages,
+      isbn: existing.isbn || incoming.isbn,
+      issn: existing.issn || incoming.issn,
+      conference: selectBestString(existing.conference, incoming.conference),
+      edition: existing.edition || incoming.edition,
+      location: existing.location || incoming.location,
+      
+      // Merged fields
+      dataAvailability: mergedAvailability,
+      sourceOrigin: mergedSources,
+      lastEnriched: existing.lastEnriched || incoming.lastEnriched,
+      fullTextSections: existing.fullTextSections || incoming.fullTextSections,
+    };
+  }
+
+  /**
+   * Merge two papers, preferring more complete data (legacy method)
    * Priority: higher dataAvailability > more content > existing data
    */
   private mergePapers(existing: Paper, incoming: Paper): Paper {

@@ -54,13 +54,20 @@ export default function HomePage() {
             .limit(6);
 
           if (!error && data) {
-            const sessions: HistorySession[] = data.map(session => ({
+            const sessions: HistorySession[] = data.map((session: {
+              id: string;
+              query: string;
+              title: string | null;
+              status: string;
+              created_at: string;
+              citations_count: number | null;
+            }) => ({
               id: session.id,
               title: session.title || '',
               query: session.query,
               status: session.status as HistorySession['status'],
               createdAt: new Date(session.created_at).getTime(),
-              citationsCount: session.citations_count,
+              citationsCount: session.citations_count ?? undefined,
             }));
             setHistory(sessions);
           }

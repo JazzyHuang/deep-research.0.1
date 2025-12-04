@@ -329,9 +329,28 @@ export function useResearchSession({
               }
             }
           } catch (err) {
-            if (err instanceof Error && err.name !== 'AbortError') {
-              setError(err.message);
-              setAgentState('error');
+            // Handle stream errors gracefully
+            if (err instanceof Error) {
+              const errName = err.name.toLowerCase();
+              const errMsg = err.message.toLowerCase();
+              
+              // Ignore abort errors (user cancelled)
+              if (errName === 'aborterror' || errMsg.includes('abort')) {
+                console.log('Research session aborted by user');
+                return;
+              }
+              
+              // Handle "terminated" and other stream errors
+              if (errMsg.includes('terminated') || errMsg.includes('network')) {
+                const friendlyError = '连接已断开，请刷新页面重试';
+                setError(friendlyError);
+                setAgentState('error');
+                onError?.(friendlyError);
+              } else {
+                setError(err.message);
+                setAgentState('error');
+                onError?.(err.message);
+              }
             }
           } finally {
             setIsConnected(false);
