@@ -10,7 +10,57 @@ export type MessageType =
   | 'assistant'      // AI text response
   | 'agent_progress' // Agent execution progress (collapsible timeline)
   | 'card'           // Interactive card
-  | 'checkpoint';    // Checkpoint requiring user confirmation
+  | 'checkpoint'     // Checkpoint requiring user confirmation
+  | 'log_line'       // Gray execution log entry
+  | 'summary_block'  // White key summary
+  | 'thinking';      // Collapsible thinking process
+
+// Log line icon types
+export type LogLineIcon = 
+  | 'search' 
+  | 'filter' 
+  | 'analyze' 
+  | 'write' 
+  | 'check' 
+  | 'info'
+  | 'warning'
+  | 'database';
+
+// Log line data for execution logs
+export interface LogLineData {
+  text: string;
+  icon?: LogLineIcon;
+  details?: string;        // Optional expandable details
+  timestamp?: number;
+}
+
+// Summary block data for key summaries
+export interface SummaryBlockData {
+  title?: string;          // Optional title like "Summary" or "Next Steps"
+  content: string;
+  bulletPoints?: string[]; // Optional list of key points
+}
+
+// Thinking process data
+export interface ThinkingData {
+  content: string;
+  duration?: number;       // Duration in seconds
+  isComplete: boolean;
+}
+
+// Todo item for task tracking
+export interface TodoItem {
+  id: string;
+  text: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  completedAt?: number;
+}
+
+// Task progress for todo tracking
+export interface TaskProgress {
+  todos: TodoItem[];
+  currentPhase?: string;   // e.g., "Planning", "Searching", "Writing"
+}
 
 // Message role (simplified)
 export type MessageRole = 'user' | 'assistant' | 'system';
@@ -86,6 +136,15 @@ export interface Message {
   // Checkpoint data (for type: 'checkpoint')
   checkpoint?: CheckpointData;
   
+  // Log line data (for type: 'log_line')
+  logLine?: LogLineData;
+  
+  // Summary block data (for type: 'summary_block')
+  summaryBlock?: SummaryBlockData;
+  
+  // Thinking process data (for type: 'thinking')
+  thinking?: ThinkingData;
+  
   // Streaming state
   isStreaming?: boolean;
 }
@@ -95,6 +154,7 @@ export interface ConversationState {
   sessionId: string;
   query: string;
   messages: Message[];
+  taskProgress: TaskProgress;
   isConnected: boolean;
   error?: string;
 }
@@ -126,6 +186,19 @@ export type ConversationEvent =
   // Checkpoint events
   | { type: 'checkpoint_reached'; checkpoint: CheckpointData }
   | { type: 'checkpoint_resolved'; checkpointId: string; resolution: string }
+  
+  // Log and summary events
+  | { type: 'log_line'; data: LogLineData }
+  | { type: 'summary_block'; data: SummaryBlockData }
+  
+  // Thinking events
+  | { type: 'thinking_start'; messageId: string }
+  | { type: 'thinking_content'; messageId: string; content: string }
+  | { type: 'thinking_complete'; messageId: string; duration: number }
+  
+  // Todo events
+  | { type: 'todo_update'; todos: TodoItem[] }
+  | { type: 'todo_item_complete'; todoId: string }
   
   // Control events
   | { type: 'agent_paused'; reason?: string }

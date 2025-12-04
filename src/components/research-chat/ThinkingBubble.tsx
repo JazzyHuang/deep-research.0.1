@@ -1,32 +1,37 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Brain, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
+import { Brain, ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ThinkingBubbleProps {
   content: string;
-  title?: string;
+  duration?: number;         // Duration in seconds (when complete)
   isStreaming?: boolean;
-  isCollapsible?: boolean;
-  defaultExpanded?: boolean;
+  isComplete?: boolean;
   className?: string;
 }
 
 /**
- * ThinkingBubble - Displays AI thinking/reasoning process
- * With streaming animation and collapsible support
+ * ThinkingBubble - Redesigned for execution log UI
+ * Features:
+ * - No container/border - just gray text
+ * - Auto-scroll during streaming
+ * - Auto-collapse after streaming completes to "Thought for Xs"
+ * - Click to expand/view full content
  */
 export function ThinkingBubble({
   content,
-  title = '思考中',
+  duration,
   isStreaming = false,
-  isCollapsible = true,
-  defaultExpanded = true,
+  isComplete = false,
   className,
 }: ThinkingBubbleProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  // Auto-collapse when streaming completes
+  const [isExpanded, setIsExpanded] = useState(!isComplete);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [startTime] = useState(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   
   // Auto-scroll to bottom when streaming
   useEffect(() => {
@@ -35,203 +40,107 @@ export function ThinkingBubble({
     }
   }, [content, isStreaming]);
   
-  return (
-    <div className={cn(
-      "rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10",
-      "overflow-hidden transition-all duration-300",
-      className
-    )}>
-      {/* Header */}
-      <button
-        onClick={() => isCollapsible && setIsExpanded(!isExpanded)}
-        className={cn(
-          "w-full flex items-center gap-2 px-4 py-3",
-          "text-left transition-colors",
-          isCollapsible && "hover:bg-primary/5 cursor-pointer"
-        )}
-        disabled={!isCollapsible}
+  // Track elapsed time during streaming
+  useEffect(() => {
+    if (!isStreaming) return;
+    
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isStreaming, startTime]);
+  
+  // Auto-collapse when complete
+  useEffect(() => {
+    if (isComplete && !isStreaming) {
+      setIsExpanded(false);
+    }
+  }, [isComplete, isStreaming]);
+  
+  const displayDuration = duration ?? elapsedSeconds;
+  
+  // Collapsed state - single line "Thought for Xs"
+  if (!isExpanded && isComplete) {
+    return (
+      <div 
+        className={cn("thinking-container", className)}
+        onClick={() => setIsExpanded(true)}
       >
-        {/* Icon with animation */}
-        <div className="relative">
-          <Brain className={cn(
-            "w-4 h-4 text-primary",
-            isStreaming && "animate-pulse"
-          )} />
-          {isStreaming && (
-            <Sparkles className="absolute -top-1 -right-1 w-2.5 h-2.5 text-primary animate-ping" />
-          )}
+        <div className="thinking-collapsed">
+          <ChevronRight className="w-3 h-3" />
+          <Brain className="w-3 h-3" />
+          <span>Thought for {displayDuration}s</span>
         </div>
-        
-        {/* Title */}
-        <span className="text-sm font-medium text-foreground flex-1">
-          {title}
-          {isStreaming && (
-            <span className="ml-2 text-xs text-muted-foreground">
-              正在分析...
-            </span>
-          )}
-        </span>
-        
-        {/* Expand/Collapse icon */}
-        {isCollapsible && (
-          <div className="text-muted-foreground">
-            {isExpanded ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </div>
-        )}
-      </button>
-      
-      {/* Content */}
-      {isExpanded && (
-        <div
-          ref={contentRef}
-          className={cn(
-            "px-4 pb-4 overflow-y-auto",
-            "max-h-[300px]",
-            "scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
-          )}
-        >
-          <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-            {content}
-            {isStreaming && (
-              <span className="inline-block w-2 h-4 ml-0.5 bg-primary/70 animate-blink" />
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * ThinkingStep - A single step in the thinking process
- */
-interface ThinkingStepProps {
-  step: number;
-  title: string;
-  content: string;
-  status: 'pending' | 'running' | 'complete';
-  className?: string;
-}
-
-export function ThinkingStep({
-  step,
-  title,
-  content,
-  status,
-  className,
-}: ThinkingStepProps) {
-  return (
-    <div className={cn(
-      "flex gap-3 py-2",
-      status === 'pending' && "opacity-50",
-      className
-    )}>
-      {/* Step number */}
-      <div className={cn(
-        "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
-        status === 'complete' && "bg-primary/20 text-primary",
-        status === 'running' && "bg-primary text-primary-foreground animate-pulse",
-        status === 'pending' && "bg-muted text-muted-foreground"
-      )}>
-        {step}
       </div>
-      
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p className={cn(
-          "text-sm font-medium",
-          status === 'complete' && "text-foreground",
-          status === 'running' && "text-primary",
-          status === 'pending' && "text-muted-foreground"
-        )}>
-          {title}
-        </p>
-        {content && status !== 'pending' && (
-          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            {content}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * ThinkingTimeline - Multi-step thinking visualization
- */
-interface ThinkingTimelineProps {
-  steps: Array<{
-    id: string;
-    title: string;
-    content: string;
-    status: 'pending' | 'running' | 'complete';
-  }>;
-  isCollapsed?: boolean;
-  className?: string;
-}
-
-export function ThinkingTimeline({
-  steps,
-  isCollapsed = false,
-  className,
-}: ThinkingTimelineProps) {
-  const [expanded, setExpanded] = useState(!isCollapsed);
-  const runningStep = steps.find(s => s.status === 'running');
-  const completedCount = steps.filter(s => s.status === 'complete').length;
+    );
+  }
   
   return (
-    <div className={cn(
-      "rounded-xl border border-border bg-card overflow-hidden",
-      className
-    )}>
-      {/* Header */}
+    <div className={cn("thinking-container py-2", className)}>
+      {/* Header - Collapsible toggle */}
       <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
-      >
-        <div className="relative">
-          <Brain className={cn(
-            "w-4 h-4",
-            runningStep ? "text-primary animate-pulse" : "text-muted-foreground"
-          )} />
-        </div>
-        
-        <span className="text-sm font-medium flex-1 text-left">
-          {runningStep ? runningStep.title : `分析完成 (${completedCount}/${steps.length})`}
-        </span>
-        
-        <span className="text-xs text-muted-foreground">
-          {completedCount}/{steps.length}
-        </span>
-        
-        {expanded ? (
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        onClick={() => isComplete && setIsExpanded(!isExpanded)}
+        className={cn(
+          "flex items-center gap-2 mb-1",
+          "text-xs text-muted-foreground/50",
+          isComplete && "cursor-pointer hover:text-muted-foreground/70"
         )}
+        disabled={!isComplete}
+      >
+        {isComplete ? (
+          <ChevronDown className="w-3 h-3" />
+        ) : (
+          <div className="w-3 h-3" /> // Spacer
+        )}
+        <Brain className={cn(
+          "w-3 h-3",
+          isStreaming && "animate-pulse"
+        )} />
+        <span>
+          {isStreaming ? `Thinking...` : `Thought for ${displayDuration}s`}
+        </span>
       </button>
       
-      {/* Steps */}
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-border">
-          {steps.map((step, index) => (
-            <ThinkingStep
-              key={step.id}
-              step={index + 1}
-              title={step.title}
-              content={step.content}
-              status={step.status}
-            />
-          ))}
+      {/* Content - Scrollable */}
+      <div
+        ref={contentRef}
+        className={cn(
+          "thinking-expanded ml-5",
+          "scrollbar-thin"
+        )}
+      >
+        <div className="thinking-text whitespace-pre-wrap">
+          {content}
+          {/* Streaming cursor */}
+          {isStreaming && (
+            <span className="thinking-cursor" />
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
+/**
+ * ThinkingIndicator - Simple inline indicator when thinking
+ */
+interface ThinkingIndicatorProps {
+  className?: string;
+}
 
+export function ThinkingIndicator({ className }: ThinkingIndicatorProps) {
+  return (
+    <div className={cn(
+      "flex items-center gap-2 py-1",
+      "text-xs text-muted-foreground/50",
+      className
+    )}>
+      <Brain className="w-3 h-3 animate-pulse" />
+      <span>Thinking...</span>
+      <span className="thinking-cursor" />
+    </div>
+  );
+}
 
+export default ThinkingBubble;

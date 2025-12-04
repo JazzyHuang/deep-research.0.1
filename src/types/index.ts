@@ -41,3 +41,26 @@ export {
   getButtonMode,
   isInputDisabled,
 } from './agent';
+
+// AI SDK v5 UIMessage types
+export type {
+  ResearchUIMessage,
+  ResearchDataParts,
+  InteractiveCard as UIInteractiveCard,
+  CardType as UICardType,
+  PlanData,
+  PaperListData,
+  QualityData,
+  DocumentData,
+  CheckpointData as UICheckpointData,
+  AgentStepData,
+  TodoData,
+  LogLineData as UILogLineData,
+  SummaryBlockData as UISummaryBlockData,
+  NotificationData,
+  DataPart,
+  AnyDataPart,
+  DataCardType,
+} from './ui-message';
+
+export { isDataPart, isDataPartOfType } from './ui-message';

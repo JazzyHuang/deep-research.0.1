@@ -1,11 +1,32 @@
-export { ChatContainer } from './ChatContainer';
-export { MessageStream } from './MessageStream';
+/**
+ * Research Chat Components
+ * 
+ * AI SDK v5 components for the research chat interface.
+ */
+
+// Message-related components
 export { UserMessage } from './UserMessage';
 export { AssistantMessage } from './AssistantMessage';
+
+// Execution and progress components
 export { AgentTimeline } from './AgentTimeline';
+export { TodoProgress } from './TodoProgress';
+export { ThinkingBubble, ThinkingIndicator } from './ThinkingBubble';
+export { LogLine } from './LogLine';
+export { SummaryBlock } from './SummaryBlock';
+
+// Progress UI components
+export { ProgressHeader, deriveStageFromSteps, type ResearchStage } from './ProgressHeader';
+export { FloatingProgress } from './FloatingProgress';
+
+// Input components
 export { ChatInput } from './ChatInput';
 export { ThoughtIndicator } from './ThoughtIndicator';
+
+// Tool/action components
 export { ToolCallBlock } from './ToolCallBlock';
 export { FileChangePill } from './FileChangePill';
 export { HoverActions } from './HoverActions';
-export { ThinkingBubble, ThinkingStep, ThinkingTimeline } from './ThinkingBubble';
+
+// AI SDK v5 parts-based rendering
+export * from './parts';

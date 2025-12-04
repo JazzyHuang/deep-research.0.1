@@ -1,14 +1,49 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+/**
+ * ResearchSessionPage - AI SDK v5 Implementation
+ * 
+ * Redesigned for better UI/UX:
+ * - Sticky progress header showing research stages
+ * - Agent timeline positioned before text output
+ * - Clean message layout without assistant avatars
+ * - Enhanced checkpoint and card animations
+ * - Floating progress indicator
+ */
+
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { ChatContainer } from '@/components/research-chat';
+import { useResearchChat } from '@/hooks/useResearchChat';
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+  ConversationEmptyState,
+  Message,
+  MessageContent,
+  MessageAvatar,
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputSubmit,
+  PromptInputFooter,
+  Loader,
+  ResearchLoader,
+} from '@/components/ai-elements';
+import { MessagePartsRenderer } from '@/components/research-chat/parts';
 import { SidePanel } from '@/components/sidebar';
 import { HistorySidebar, type HistoryItemData } from '@/components/history-sidebar';
-import { useResearchSession } from '@/hooks/useResearchSession';
-import { Settings, Download, PanelLeftClose, PanelLeft, ArrowLeft } from 'lucide-react';
+import { 
+  AgentTimeline, 
+  ProgressHeader, 
+  deriveStageFromSteps,
+  FloatingProgress,
+  TodoProgress 
+} from '@/components/research-chat';
+import { Settings, Download, PanelLeftClose, PanelLeft, ArrowLeft, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { UIMessage } from 'ai';
+import type { InteractiveCard } from '@/types/cards';
 
 // Shared storage key - must match the one in home page
 const HISTORY_STORAGE_KEY = 'deepresearch_history';
@@ -23,10 +58,6 @@ interface SharedHistorySession {
   citationsCount?: number;
 }
 
-/**
- * ResearchSessionPage - Cursor 2.0 style layout
- * Features: History sidebar (left), Main chat (center), Detail panel (right, push)
- */
 export default function ResearchSessionPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -34,11 +65,60 @@ export default function ResearchSessionPage() {
   const sessionId = params.sessionId as string;
   const initialQuery = searchParams.get('q') || '';
   
-  const [hasStarted, setHasStarted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userSessions, setUserSessions] = useState<HistoryItemData[]>([]);
   
-  // Load history from localStorage (shared with home page)
+  // Use the AI SDK v5-based hook
+  const {
+    messages,
+    status,
+    error,
+    inputValue,
+    setInputValue,
+    buttonMode,
+    inputDisabled,
+    taskProgress,
+    currentCheckpoint,
+    cards,
+    agentSteps,
+    sendMessage,
+    stopResearch,
+    respondToCheckpoint,
+    openSidePanel,
+    closeSidePanel,
+    sidePanel,
+    isComplete,
+  } = useResearchChat({
+    sessionId,
+    initialQuery,
+    onComplete: () => {
+      console.log('Research completed');
+      updateSessionStatus('completed');
+    },
+    onError: (err) => {
+      console.error('Research error:', err);
+      updateSessionStatus('error');
+    },
+  });
+  
+  // Derive research stage from agent steps
+  const { currentStage, completedStages } = useMemo(() => {
+    return deriveStageFromSteps(agentSteps.map(s => ({
+      name: s.name,
+      status: s.status
+    })));
+  }, [agentSteps]);
+  
+  // Get current step name for progress header
+  const currentStepName = useMemo(() => {
+    const runningStep = agentSteps.find(s => s.status === 'running');
+    return runningStep?.title;
+  }, [agentSteps]);
+  
+  // Check if research is active
+  const isActive = status === 'streaming' || status === 'submitted';
+  
+  // Load history from localStorage
   const loadSharedHistory = useCallback((): SharedHistorySession[] => {
     try {
       const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -51,7 +131,7 @@ export default function ResearchSessionPage() {
     return [];
   }, []);
   
-  // Save history to localStorage (shared with home page)
+  // Save history to localStorage
   const saveSharedHistory = useCallback((sessions: SharedHistorySession[]) => {
     try {
       localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(sessions));
@@ -60,7 +140,17 @@ export default function ResearchSessionPage() {
     }
   }, []);
   
-  // Convert shared format to sidebar format
+  // Update session status
+  const updateSessionStatus = useCallback((newStatus: SharedHistorySession['status']) => {
+    const sessions = loadSharedHistory();
+    const idx = sessions.findIndex(s => s.id === sessionId);
+    if (idx >= 0) {
+      sessions[idx].status = newStatus;
+      saveSharedHistory(sessions);
+    }
+  }, [sessionId, loadSharedHistory, saveSharedHistory]);
+  
+  // Convert to sidebar format
   const convertToSidebarFormat = useCallback((sessions: SharedHistorySession[]): HistoryItemData[] => {
     return sessions.map(s => ({
       id: s.id,
@@ -72,110 +162,47 @@ export default function ResearchSessionPage() {
     }));
   }, []);
   
-  // Load user sessions from shared localStorage
+  // Load user sessions
   useEffect(() => {
     const sharedSessions = loadSharedHistory();
     setUserSessions(convertToSidebarFormat(sharedSessions));
-  }, [loadSharedHistory, convertToSidebarFormat]);
-  
-  // Update session status when entering with a query (session should already exist from home page)
-  useEffect(() => {
-    if (initialQuery) {
-      const sharedSessions = loadSharedHistory();
-      const existingIndex = sharedSessions.findIndex(s => s.id === sessionId);
-      
-      if (existingIndex >= 0) {
-        // Update status to running
-        sharedSessions[existingIndex].status = 'running';
-        saveSharedHistory(sharedSessions);
-        setUserSessions(convertToSidebarFormat(sharedSessions));
-      }
-    }
-  }, [sessionId, initialQuery, loadSharedHistory, saveSharedHistory, convertToSidebarFormat]);
-  
-  // History list - real user sessions only
-  const historyList: HistoryItemData[] = useMemo(() => {
-    // Update status of current session if it's in userSessions
-    const updatedUserSessions = userSessions.map(session => ({
-      ...session,
-      status: session.id === sessionId ? 'running' as const : session.status,
-    }));
     
-    // Sort by createdAt descending
-    updatedUserSessions.sort((a, b) => b.createdAt - a.createdAt);
-    return updatedUserSessions;
-  }, [sessionId, userSessions]);
-  
-  const {
-    state,
-    sendMessage,
-    stopAgent,
-    respondToCheckpoint,
-    openSidePanel,
-    closeSidePanel,
-    saveSidePanelChanges,
-    setInputValue,
-    connect,
-  } = useResearchSession({
-    sessionId,
-    initialQuery,
-    onComplete: () => {
-      console.log('Research completed');
-    },
-    onError: (error) => {
-      console.error('Research error:', error);
-    },
-  });
-  
-  // Auto-start on mount if we have a query
-  useEffect(() => {
-    if (initialQuery && !hasStarted) {
-      setHasStarted(true);
-      connect();
+    // Update current session status to running
+    if (initialQuery) {
+      updateSessionStatus('running');
     }
-  }, [initialQuery, hasStarted, connect]);
+  }, [loadSharedHistory, convertToSidebarFormat, initialQuery, updateSessionStatus]);
   
-  // Handle input submit
+  // Handle submit
   const handleSubmit = () => {
-    if (state.inputState.buttonMode === 'stop') {
-      stopAgent();
-    } else if (state.inputState.value.trim()) {
-      sendMessage(state.inputState.value);
+    if (buttonMode === 'stop') {
+      stopResearch();
+    } else if (inputValue.trim()) {
+      sendMessage(inputValue);
     }
   };
   
-  // Handle card title click (open side panel)
-  const handleCardClick = (cardId: string) => {
+  // Handle card click - open side panel
+  const handleCardClick = useCallback((cardId: string) => {
     openSidePanel(cardId);
-  };
+  }, [openSidePanel]);
   
   // Handle checkpoint action
-  const handleCheckpointAction = (checkpointId: string, action: string) => {
+  const handleCheckpointAction = useCallback((checkpointId: string, action: string) => {
     if (action === 'edit') {
-      const checkpoint = state.currentCheckpoint;
+      // For edit actions, open the side panel for the associated card
+      const checkpoint = currentCheckpoint;
       if (checkpoint?.cardId) {
         openSidePanel(checkpoint.cardId);
       }
     } else {
       respondToCheckpoint(checkpointId, action);
     }
-  };
-  
-  // Handle side panel save
-  const handleSidePanelSave = (changes: Record<string, unknown>) => {
-    if (state.sidePanel.cardId) {
-      saveSidePanelChanges(state.sidePanel.cardId, changes);
-      
-      if (state.currentCheckpoint?.cardId === state.sidePanel.cardId) {
-        respondToCheckpoint(state.currentCheckpoint.id, 'approve', changes);
-      }
-    }
-  };
+  }, [currentCheckpoint, openSidePanel, respondToCheckpoint]);
   
   // Handle history selection
   const handleHistorySelect = (id: string) => {
     if (id !== sessionId) {
-      // Navigate to the selected session
       router.push(`/research/${id}`);
     }
   };
@@ -187,35 +214,80 @@ export default function ResearchSessionPage() {
   
   // Handle history delete
   const handleHistoryDelete = useCallback((id: string) => {
-    // Remove from shared localStorage
-    const sharedSessions = loadSharedHistory();
-    const updated = sharedSessions.filter(s => s.id !== id);
+    const sessions = loadSharedHistory();
+    const updated = sessions.filter(s => s.id !== id);
     saveSharedHistory(updated);
-    
-    // Update local state
     setUserSessions(convertToSidebarFormat(updated));
     
-    // If deleting current session, navigate to home
     if (id === sessionId) {
       router.push('/');
     }
   }, [sessionId, router, loadSharedHistory, saveSharedHistory, convertToSidebarFormat]);
   
+  // Handle side panel save
+  const handleSidePanelSave = useCallback((changes: Record<string, unknown>) => {
+    if (sidePanel.cardId && currentCheckpoint?.cardId === sidePanel.cardId) {
+      respondToCheckpoint(currentCheckpoint.id, 'approve', changes);
+    }
+    closeSidePanel();
+  }, [sidePanel.cardId, currentCheckpoint, respondToCheckpoint, closeSidePanel]);
+  
   // Get current card for side panel
-  const currentCard = state.sidePanel.cardId 
-    ? state.cards.get(state.sidePanel.cardId) 
-    : undefined;
+  const currentCard = useMemo(() => {
+    if (!sidePanel.cardId) return undefined;
+    return cards.get(sidePanel.cardId);
+  }, [sidePanel.cardId, cards]);
+  
+  // Deduplicate messages to prevent duplicate key errors
+  const uniqueMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter(msg => {
+      if (seen.has(msg.id)) return false;
+      seen.add(msg.id);
+      return true;
+    });
+  }, [messages]);
+  
+  // Build agent progress for timeline
+  const agentProgress = useMemo(() => {
+    if (agentSteps.length === 0) return null;
+    
+    return {
+      steps: agentSteps.map(step => ({
+        id: step.id,
+        name: step.name,
+        title: step.title,
+        status: step.status,
+        duration: step.duration,
+        summary: step.summary,
+        details: step.details,
+      })),
+      currentStepId: agentSteps.find(s => s.status === 'running')?.id,
+      isCollapsed: false,
+    };
+  }, [agentSteps]);
+  
+  // Get text content from user message
+  const getUserMessageText = (message: UIMessage): string => {
+    if (message.parts) {
+      const textParts = message.parts.filter(p => p.type === 'text');
+      if (textParts.length > 0) {
+        return textParts.map(p => (p as { text: string }).text).join(' ');
+      }
+    }
+    return '';
+  };
   
   return (
     <div className="h-screen flex bg-background overflow-hidden">
-      {/* Left History Sidebar - Cursor style */}
+      {/* Left History Sidebar */}
       <div className={cn(
-        "transition-all duration-300 ease-in-out flex-shrink-0",
-        sidebarOpen ? "w-72" : "w-0 overflow-hidden"
+        'transition-all duration-300 ease-in-out flex-shrink-0',
+        sidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
       )}>
         {sidebarOpen && (
           <HistorySidebar
-            history={historyList}
+            history={userSessions}
             currentSessionId={sessionId}
             onSelect={handleHistorySelect}
             onNewSession={handleNewSession}
@@ -227,10 +299,9 @@ export default function ResearchSessionPage() {
       
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Compact Header - Cursor style */}
+        {/* Header */}
         <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-background flex-shrink-0">
           <div className="flex items-center gap-3">
-            {/* Back to home button */}
             <Button
               variant="ghost"
               size="icon"
@@ -241,7 +312,6 @@ export default function ResearchSessionPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             
-            {/* Sidebar toggle */}
             <Button
               variant="ghost"
               size="icon"
@@ -255,7 +325,6 @@ export default function ResearchSessionPage() {
               )}
             </Button>
             
-            {/* Title */}
             <h1 className="text-sm font-medium truncate max-w-[400px]">
               {initialQuery || '新研究'}
             </h1>
@@ -271,31 +340,174 @@ export default function ResearchSessionPage() {
           </div>
         </header>
         
-        {/* Chat Container - Takes remaining space */}
-        <div className={cn(
-          "flex-1 transition-all duration-300 ease-in-out min-h-0",
-          state.sidePanel.isOpen && "sm:mr-[400px]"
-        )}>
-          <ChatContainer
-            messages={state.messages}
-            cards={state.cards}
-            agentState={state.agentState}
-            inputValue={state.inputState.value}
-            buttonMode={state.inputState.buttonMode}
-            inputDisabled={state.inputState.disabled}
-            currentCheckpoint={state.currentCheckpoint}
-            onInputChange={setInputValue}
-            onSubmit={handleSubmit}
-            onCardClick={handleCardClick}
-            onCheckpointAction={handleCheckpointAction}
+        {/* Progress Header - Sticky below main header */}
+        {(isActive || completedStages.length > 0) && (
+          <ProgressHeader
+            currentStage={currentStage}
+            completedStages={completedStages}
+            currentStepName={currentStepName}
+            isActive={isActive}
           />
+        )}
+        
+        {/* Chat Container */}
+        <div className={cn(
+          'flex-1 transition-all duration-300 ease-in-out min-h-0',
+          sidePanel.isOpen && 'sm:mr-[400px]'
+        )}>
+          <Conversation className="h-full">
+            <ConversationContent>
+              {uniqueMessages.length === 0 && !isActive ? (
+                <ConversationEmptyState
+                  title="开始研究"
+                  description="输入您的研究问题，AI 将帮助您深入分析"
+                />
+              ) : (
+                <div className="space-y-4">
+                  {/* Agent Timeline - positioned at the top during research */}
+                  {agentProgress && agentProgress.steps.length > 0 && (
+                    <div className="mb-6">
+                      <AgentTimeline progress={agentProgress} mode="inline" />
+                    </div>
+                  )}
+                  
+                  {/* Messages */}
+                  {uniqueMessages.map((message: UIMessage) => (
+                    <div key={message.id}>
+                      {message.role === 'user' ? (
+                        // User message - right aligned with avatar
+                        <Message from="user">
+                          <MessageContent variant="contained">
+                            {getUserMessageText(message)}
+                          </MessageContent>
+                          <MessageAvatar name="You" />
+                        </Message>
+                      ) : (
+                        // Assistant message - full width, no avatar
+                        <Message from="assistant">
+                          <MessageContent variant="plain">
+                            <MessagePartsRenderer
+                              message={message}
+                              onCardClick={handleCardClick}
+                              onCheckpointAction={handleCheckpointAction}
+                            />
+                          </MessageContent>
+                        </Message>
+                      )}
+                    </div>
+                  ))}
+                  
+                  {/* Loading state with context */}
+                  {status === 'submitted' && (
+                    <div className="py-4">
+                      <Loader 
+                        context={
+                          currentStage === 'planning' ? 'thinking' :
+                          currentStage === 'searching' ? 'searching' :
+                          currentStage === 'analyzing' ? 'analyzing' :
+                          currentStage === 'writing' ? 'writing' :
+                          'processing'
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Initial loading state */}
+              {uniqueMessages.length === 0 && isActive && (
+                <ResearchLoader 
+                  stage={currentStepName}
+                  message="正在启动深度研究..."
+                />
+              )}
+              
+              {/* Error state */}
+              {error && (
+                <div className="py-3 px-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                  <p className="font-medium mb-1">研究出错</p>
+                  <p className="text-destructive/80">{error.message}</p>
+                </div>
+              )}
+            </ConversationContent>
+            
+            <ConversationScrollButton />
+            
+            {/* Floating Progress Indicator */}
+            {isActive && agentSteps.length > 0 && (
+              <FloatingProgress 
+                steps={agentSteps} 
+                isActive={isActive}
+              />
+            )}
+            
+            {/* Input Area */}
+            <div className="p-4 border-t border-border bg-background/95 backdrop-blur">
+              {/* Task progress - above input */}
+              {taskProgress.todos.length > 0 && (
+                <div className="mb-3">
+                  <TodoProgress taskProgress={taskProgress} />
+                </div>
+              )}
+              
+              <PromptInput 
+                onSubmit={handleSubmit}
+                isSubmitting={status === 'streaming' || status === 'submitted'}
+                isDisabled={inputDisabled}
+              >
+                <PromptInputTextarea
+                  value={inputValue}
+                  onChange={setInputValue}
+                  placeholder={
+                    status === 'streaming'
+                      ? '研究进行中，点击停止按钮暂停...'
+                      : currentCheckpoint
+                      ? '输入反馈或选择上方操作继续...'
+                      : '输入研究问题...'
+                  }
+                />
+                <PromptInputFooter>
+                  <div className="flex items-center gap-2">
+                    {/* Status indicator */}
+                    {isActive && (
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        研究中
+                      </span>
+                    )}
+                    {isComplete && (
+                      <span className="text-xs text-primary font-medium">
+                        研究完成
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {buttonMode === 'stop' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={stopResearch}
+                        className="h-8 px-3"
+                      >
+                        <Square className="h-3 w-3 mr-1.5" />
+                        停止
+                      </Button>
+                    ) : (
+                      <PromptInputSubmit />
+                    )}
+                  </div>
+                </PromptInputFooter>
+              </PromptInput>
+            </div>
+          </Conversation>
         </div>
       </main>
       
-      {/* Right Side Panel - Push style (no overlay) */}
+      {/* Right Side Panel */}
       <SidePanel
-        isOpen={state.sidePanel.isOpen}
-        card={currentCard}
+        isOpen={sidePanel.isOpen}
+        card={currentCard as InteractiveCard | undefined}
         onClose={closeSidePanel}
         onSave={handleSidePanelSave}
       />

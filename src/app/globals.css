@@ -965,4 +965,397 @@
     from { background-position: 200% 0; }
     to { background-position: -200% 0; }
   }
+  
+  /* ============================================
+     Execution Log UI Styles
+     ============================================ */
+  
+  /* Log text - gray, small, tight line-height */
+  .log-text {
+    @apply text-xs text-muted-foreground/70 leading-tight;
+    font-family: var(--font-mono);
+  }
+  
+  /* Summary text - foreground color with emphasis */
+  .summary-text {
+    @apply text-sm text-foreground leading-relaxed;
+  }
+  
+  /* Summary block enter animation */
+  .summary-block-enter {
+    animation: summaryFadeIn 300ms ease-out;
+  }
+  
+  @keyframes summaryFadeIn {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  /* Todo check animation */
+  .todo-check-animate {
+    animation: todoCheckPop 400ms ease-out;
+  }
+  
+  @keyframes todoCheckPop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  /* ============================================
+     Vertical Timeline Styles
+     ============================================ */
+  
+  .vertical-timeline {
+    @apply relative;
+  }
+  
+  .vertical-timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  
+  .vertical-timeline-item {
+    @apply relative pl-6;
+  }
+  
+  .vertical-timeline-dot {
+    @apply absolute left-0 w-4 h-4 rounded-full flex items-center justify-center;
+    @apply bg-background border-2 border-muted;
+    top: 2px;
+  }
+  
+  .vertical-timeline-dot.active {
+    @apply border-primary bg-primary/10;
+  }
+  
+  .vertical-timeline-dot.complete {
+    @apply border-primary bg-primary text-primary-foreground;
+  }
+  
+  .vertical-timeline-dot.running {
+    @apply border-primary;
+    animation: timelineDotPulse 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes timelineDotPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(163, 163, 120, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(163, 163, 120, 0);
+    }
+  }
+  
+  /* ============================================
+     Thinking Process Styles
+     ============================================ */
+  
+  .thinking-text {
+    @apply text-xs text-muted-foreground/60 leading-snug;
+    font-family: var(--font-mono);
+  }
+  
+  .thinking-collapsed {
+    @apply flex items-center gap-2 py-1.5 cursor-pointer;
+    @apply text-xs text-muted-foreground/50 hover:text-muted-foreground/70;
+    @apply transition-colors duration-150;
+  }
+  
+  .thinking-expanded {
+    @apply py-2 px-0;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .thinking-container {
+    animation: thinkingFadeIn 200ms ease-out;
+  }
+  
+  @keyframes thinkingFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Thinking cursor blink */
+  .thinking-cursor {
+    @apply inline-block w-1.5 h-3.5 ml-0.5 align-text-bottom;
+    @apply bg-muted-foreground/40;
+    animation: thinkingCursorBlink 0.8s step-end infinite;
+  }
+  
+  @keyframes thinkingCursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  
+  /* ============================================
+     Reasoning Part Styles
+     ============================================ */
+  
+  .reasoning-container {
+    animation: reasoningFadeIn 300ms ease-out;
+  }
+  
+  @keyframes reasoningFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .reasoning-collapsed {
+    animation: reasoningCollapse 200ms ease-out;
+  }
+  
+  .reasoning-text {
+    font-family: var(--font-mono);
+    line-height: 1.6;
+  }
+  
+  .reasoning-cursor {
+    @apply inline-block w-1.5 h-4 ml-0.5 align-text-bottom;
+    @apply bg-primary/60;
+    animation: thinkingCursorBlink 0.8s step-end infinite;
+  }
+  
+  /* ============================================
+     Card Animations
+     ============================================ */
+  
+  .card-slide-in {
+    animation: cardSlideIn 400ms ease-out;
+  }
+  
+  @keyframes cardSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  .checkpoint-card-glow::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(245, 158, 11, 0.3),
+      rgba(245, 158, 11, 0.1),
+      rgba(245, 158, 11, 0.3)
+    );
+    opacity: 0;
+    animation: checkpointCardGlow 2s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+  }
+  
+  @keyframes checkpointCardGlow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+  }
+  
+  /* Checkpoint pulse border */
+  .checkpoint-pulse-border {
+    animation: checkpointBorderPulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes checkpointBorderPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
+    }
+  }
+  
+  /* ============================================
+     Timeline Animations
+     ============================================ */
+  
+  .timeline-enter {
+    animation: timelineEnter 300ms ease-out;
+  }
+  
+  @keyframes timelineEnter {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .timeline-step {
+    animation: timelineStepEnter 200ms ease-out;
+  }
+  
+  @keyframes timelineStepEnter {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  .timeline-vertical {
+    @apply relative;
+  }
+  
+  .step-dot-pulse {
+    animation: stepDotPulse 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes stepDotPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(163, 163, 120, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(163, 163, 120, 0);
+    }
+  }
+  
+  /* ============================================
+     Progress Header Animations
+     ============================================ */
+  
+  .progress-stage-complete {
+    animation: stageComplete 400ms ease-out;
+  }
+  
+  @keyframes stageComplete {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  
+  /* ============================================
+     Ellipsis Animation
+     ============================================ */
+  
+  .animate-ellipsis-dot {
+    animation: ellipsisFade 1.4s infinite;
+    opacity: 0;
+  }
+  
+  @keyframes ellipsisFade {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+  }
+  
+  /* ============================================
+     Floating Progress Animations
+     ============================================ */
+  
+  .floating-progress-enter {
+    animation: floatingProgressEnter 300ms ease-out;
+  }
+  
+  @keyframes floatingProgressEnter {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 16px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+  
+  /* ============================================
+     Utility Animations
+     ============================================ */
+  
+  .animate-in {
+    animation: animateIn 200ms ease-out;
+  }
+  
+  @keyframes animateIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  .slide-in-from-bottom-2 {
+    animation: slideInFromBottom 200ms ease-out;
+  }
+  
+  @keyframes slideInFromBottom {
+    from {
+      transform: translateY(8px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  .zoom-in-95 {
+    animation: zoomIn95 200ms ease-out;
+  }
+  
+  @keyframes zoomIn95 {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  .fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }

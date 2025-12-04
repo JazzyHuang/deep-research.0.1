@@ -187,6 +187,9 @@ export interface ResearchSessionState {
   messages: import('./conversation').Message[];
   cards: Map<string, InteractiveCard>;
   
+  // Task progress (todos)
+  taskProgress: import('./conversation').TaskProgress;
+  
   // Side panel state
   sidePanel: {
     isOpen: boolean;
@@ -215,6 +218,7 @@ export function createInitialSessionState(sessionId: string, query: string): Res
     phase: 'initializing',
     messages: [],
     cards: new Map(),
+    taskProgress: { todos: [] },
     sidePanel: {
       isOpen: false,
     },

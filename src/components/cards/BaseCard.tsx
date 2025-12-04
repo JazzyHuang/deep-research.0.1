@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -10,7 +10,8 @@ import {
   BookOpen,
   BarChart3,
   ListChecks,
-  ClipboardList
+  ClipboardList,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { InteractiveCard, CardType, CardAction } from '@/types/cards';
@@ -20,6 +21,8 @@ interface BaseCardProps {
   onTitleClick: () => void;
   onAction?: (action: string) => void;
   className?: string;
+  /** Enable slide-in animation */
+  animate?: boolean;
 }
 
 const CARD_ICONS: Record<CardType, React.ReactNode> = {
@@ -31,24 +34,54 @@ const CARD_ICONS: Record<CardType, React.ReactNode> = {
   citation_list: <ListChecks className="w-4 h-4" />,
 };
 
-export function BaseCard({ card, onTitleClick, onAction, className }: BaseCardProps) {
+export function BaseCard({ 
+  card, 
+  onTitleClick, 
+  onAction, 
+  className,
+  animate = true 
+}: BaseCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(card.isCollapsed);
+  const [isNew, setIsNew] = useState(animate);
+  
+  // Remove "new" state after animation completes
+  useEffect(() => {
+    if (animate) {
+      const timer = setTimeout(() => setIsNew(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [animate]);
   
   const icon = card.icon || CARD_ICONS[card.type];
   
   return (
     <div className={cn(
-      "rounded-xl border bg-card overflow-hidden transition-all duration-200",
-      card.isCheckpoint && "border-amber-500/50 shadow-amber-500/10 shadow-lg",
+      "rounded-xl border bg-card overflow-hidden transition-all duration-300",
+      // Base states
+      "hover:shadow-md",
+      // Checkpoint glow effect
+      card.isCheckpoint && [
+        "border-amber-500/50",
+        "shadow-lg shadow-amber-500/10",
+        "checkpoint-card-glow"
+      ],
+      // Slide-in animation for new cards
+      isNew && "card-slide-in",
       className
     )}>
       {/* Header - Clickable title */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
+      <div className={cn(
+        "flex items-center gap-2 px-4 py-3 border-b",
+        card.isCheckpoint ? "bg-amber-500/5" : "bg-muted/30"
+      )}>
         <button
           onClick={onTitleClick}
           className="flex items-center gap-2 flex-1 min-w-0 text-left hover:text-primary transition-colors group"
         >
-          <span className="text-primary/70 group-hover:text-primary transition-colors">
+          <span className={cn(
+            "transition-colors",
+            card.isCheckpoint ? "text-amber-500" : "text-primary/70 group-hover:text-primary"
+          )}>
             {icon}
           </span>
           <span className="font-medium text-sm truncate">
@@ -56,6 +89,14 @@ export function BaseCard({ card, onTitleClick, onAction, className }: BaseCardPr
           </span>
           <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
         </button>
+        
+        {/* New indicator */}
+        {isNew && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+            <Sparkles className="w-3 h-3" />
+            新
+          </span>
+        )}
         
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -71,15 +112,15 @@ export function BaseCard({ card, onTitleClick, onAction, className }: BaseCardPr
       
       {/* Content */}
       {!isCollapsed && (
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 animate-collapsible-down">
           <CardContent card={card} />
         </div>
       )}
       
       {/* Checkpoint Actions */}
       {card.isCheckpoint && card.actions && card.actions.length > 0 && (
-        <div className="px-4 py-3 border-t bg-muted/20">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="px-4 py-3 border-t bg-amber-500/5">
+          <div className="flex items-center gap-2 mb-3">
             <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
               等待您的确认
@@ -146,7 +187,7 @@ function PlanCardContent({ data }: { data: import('@/types/cards').PlanCardData 
         </ul>
       </div>
       
-      <div className="flex gap-4 text-xs text-muted-foreground">
+      <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t border-border/50">
         <span>搜索策略: {data.summary.searchStrategiesCount}个</span>
         <span>预期章节: {data.summary.expectedSectionsCount}个</span>
       </div>
@@ -158,12 +199,14 @@ function PaperListCardContent({ data }: { data: import('@/types/cards').PaperLis
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">
-        共找到 {data.totalFound} 篇相关论文，展示 Top {data.displayCount}
+        共找到 <span className="font-medium text-foreground">{data.totalFound}</span> 篇相关论文，展示 Top {data.displayCount}
       </p>
       <ul className="space-y-2">
         {data.papers.slice(0, 3).map((paper, i) => (
-          <li key={paper.id} className="text-sm">
-            <p className="font-medium line-clamp-1">{i + 1}. {paper.title}</p>
+          <li key={paper.id} className="text-sm group">
+            <p className="font-medium line-clamp-1 group-hover:text-primary transition-colors">
+              {i + 1}. {paper.title}
+            </p>
             <p className="text-xs text-muted-foreground">
               {paper.journal || 'Unknown Journal'}, {paper.year}
               {paper.citations !== undefined && ` · 引用 ${paper.citations}`}
@@ -182,13 +225,13 @@ function SearchResultCardContent({ data }: { data: import('@/types/cards').Searc
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-xs px-2 py-0.5 rounded bg-muted">Round {data.roundNumber}</span>
+        <span className="text-xs px-2 py-0.5 rounded bg-muted font-medium">Round {data.roundNumber}</span>
       </div>
       <p className="text-sm">
         搜索: <span className="font-medium">&ldquo;{data.query}&rdquo;</span>
       </p>
       <p className="text-sm text-muted-foreground">
-        找到 {data.resultsCount} 篇论文
+        找到 <span className="font-medium text-foreground">{data.resultsCount}</span> 篇论文
       </p>
     </div>
   );
@@ -215,11 +258,16 @@ function DocumentCardContent({ data }: { data: import('@/types/cards').DocumentC
         )}
       </div>
       
-      <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t">
+      <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t border-border/50">
         <span>字数: {data.wordCount.toLocaleString()}</span>
         <span>引用: {data.citationCount}</span>
         {data.qualityScore !== undefined && (
-          <span>质量分: {data.qualityScore}/100</span>
+          <span className={cn(
+            data.qualityScore >= 80 ? "text-green-500" :
+            data.qualityScore >= 60 ? "text-amber-500" : "text-red-500"
+          )}>
+            质量分: {data.qualityScore}/100
+          </span>
         )}
       </div>
     </div>
@@ -234,7 +282,7 @@ function QualityCardContent({ data }: { data: import('@/types/cards').QualityCar
         <span className={cn(
           "text-lg font-bold",
           data.analysis.overallScore >= 80 ? "text-green-500" :
-          data.analysis.overallScore >= 60 ? "text-yellow-500" : "text-red-500"
+          data.analysis.overallScore >= 60 ? "text-amber-500" : "text-red-500"
         )}>
           {data.analysis.overallScore}/100
         </span>
@@ -247,7 +295,7 @@ function QualityCardContent({ data }: { data: import('@/types/cards').QualityCar
       </div>
       
       {data.improvements.length > 0 && (
-        <div>
+        <div className="pt-2 border-t border-border/50">
           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">待改进</p>
           <ul className="space-y-1">
             {data.improvements.slice(0, 2).map((item, i) => (
@@ -267,7 +315,7 @@ function CitationListCardContent({ data }: { data: import('@/types/cards').Citat
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">
-        共 {data.citations.length} 条引用 · {data.style.toUpperCase()} 格式
+        共 <span className="font-medium text-foreground">{data.citations.length}</span> 条引用 · {data.style.toUpperCase()} 格式
       </p>
       <ul className="space-y-1 text-sm">
         {data.citations.slice(0, 3).map((citation, i) => (
@@ -290,9 +338,9 @@ function ProgressBar({ label, value }: { label: string; value: number }) {
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div 
             className={cn(
-              "h-full rounded-full transition-all",
+              "h-full rounded-full transition-all duration-500",
               value >= 80 ? "bg-green-500" :
-              value >= 60 ? "bg-yellow-500" : "bg-red-500"
+              value >= 60 ? "bg-amber-500" : "bg-red-500"
             )}
             style={{ width: `${value}%` }}
           />
@@ -309,9 +357,10 @@ function ActionButton({ action, onClick }: { action: CardAction; onClick: () => 
       onClick={onClick}
       disabled={action.disabled}
       className={cn(
-        "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+        "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
         "disabled:opacity-50 disabled:cursor-not-allowed",
-        action.variant === 'primary' && "bg-primary text-primary-foreground hover:bg-primary/90",
+        "hover:scale-[1.02] active:scale-[0.98]",
+        action.variant === 'primary' && "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
         action.variant === 'secondary' && "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         action.variant === 'outline' && "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
         action.variant === 'destructive' && "bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -321,4 +370,3 @@ function ActionButton({ action, onClick }: { action: CardAction; onClick: () => 
     </button>
   );
 }
-
