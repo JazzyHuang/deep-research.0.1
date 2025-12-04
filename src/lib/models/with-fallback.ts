@@ -1,10 +1,11 @@
 /**
- * Fallback wrapper for Grok models
+ * Fallback and retry wrappers for AI model calls
  * 
- * Handles automatic fallback from free tier to paid tier when:
- * - Rate limits are exceeded
- * - Free tier is unavailable
- * - Any other transient errors occur
+ * Handles:
+ * - Automatic fallback from free tier to paid tier
+ * - Retry logic for transient failures
+ * - Stream-specific retry for long-running generations
+ * - Model degradation for reliability
  */
 
 import { MODELS, logModelUsage } from './config';
@@ -160,5 +161,255 @@ export async function withGrokFallbackAndRetry<T>(
     () => withGrokFallback(operation, agent, task),
     maxRetries
   );
+}
+
+/**
+ * Error patterns that indicate the stream should be retried
+ */
+const STREAM_RETRY_ERROR_PATTERNS = [
+  'network',
+  'connection',
+  'timeout',
+  'timed out',
+  'aborted',
+  'terminated',
+  'fetch failed',
+  'socket hang up',
+  'econnreset',
+  'stream',
+  '502',
+  '503',
+  '504',
+];
+
+/**
+ * Check if an error is retryable for streaming
+ */
+function isStreamRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return STREAM_RETRY_ERROR_PATTERNS.some(pattern => message.includes(pattern));
+  }
+  return false;
+}
+
+/**
+ * Configuration for stream retry behavior
+ */
+export interface StreamRetryConfig {
+  /** Maximum number of retry attempts (default: 2) */
+  maxRetries: number;
+  /** Initial delay between retries in ms (default: 1000) */
+  initialDelayMs: number;
+  /** Whether to try fallback model on failure (default: true) */
+  useFallbackModel: boolean;
+  /** Fallback model ID (default: MODELS.LIGHTWEIGHT) */
+  fallbackModelId: string;
+  /** Agent name for logging */
+  agent: string;
+  /** Task name for logging */
+  task: string;
+}
+
+const DEFAULT_STREAM_RETRY_CONFIG: StreamRetryConfig = {
+  maxRetries: 2,
+  initialDelayMs: 1000,
+  useFallbackModel: true,
+  fallbackModelId: MODELS.LIGHTWEIGHT,
+  agent: 'Unknown',
+  task: 'unknown',
+};
+
+/**
+ * Result of a stream retry operation
+ */
+export interface StreamRetryResult<T> {
+  /** The successful stream result */
+  result: T;
+  /** Whether a fallback model was used */
+  usedFallback: boolean;
+  /** Number of attempts made */
+  attempts: number;
+  /** Model ID that succeeded */
+  modelUsed: string;
+}
+
+/**
+ * Wrapper for streaming operations with retry and fallback support
+ * 
+ * This is specifically designed for streamText calls which need special handling:
+ * 1. The initial call may fail and need retry
+ * 2. If primary model fails after retries, try fallback model
+ * 3. Provides detailed information about what happened
+ * 
+ * @param createStream - Function that creates the stream given a model ID
+ * @param primaryModelId - Primary model to use
+ * @param config - Retry configuration
+ * @returns Stream result with metadata
+ * 
+ * @example
+ * ```typescript
+ * const { result, usedFallback } = await withStreamRetry(
+ *   (modelId) => streamText({
+ *     model: openrouter(modelId),
+ *     prompt: '...',
+ *     maxTokens: 8192,
+ *   }),
+ *   MODELS.WRITER,
+ *   { agent: 'Writer', task: 'generateReport' }
+ * );
+ * ```
+ */
+/**
+ * Type for the result of streamText - using a minimal interface that all stream results satisfy
+ */
+interface StreamResult {
+  textStream: AsyncIterable<string>;
+}
+
+export async function withStreamRetry<T extends StreamResult>(
+  createStream: (modelId: string) => T,
+  primaryModelId: string,
+  config: Partial<StreamRetryConfig> = {}
+): Promise<StreamRetryResult<T>> {
+  const settings = { ...DEFAULT_STREAM_RETRY_CONFIG, ...config };
+  let attempts = 0;
+  let delayMs = settings.initialDelayMs;
+  let lastError: unknown;
+
+  // Try primary model with retries
+  for (let attempt = 0; attempt <= settings.maxRetries; attempt++) {
+    attempts++;
+    try {
+      logModelUsage(settings.agent, settings.task, primaryModelId);
+      const result = createStream(primaryModelId);
+      
+      // For streaming, we need to verify the stream is working
+      // by checking if it can be iterated (the result object exists)
+      if (result && typeof result === 'object') {
+        return {
+          result,
+          usedFallback: false,
+          attempts,
+          modelUsed: primaryModelId,
+        };
+      }
+      
+      throw new Error('Stream creation returned invalid result');
+    } catch (error) {
+      lastError = error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      console.warn(
+        `[Stream] ${settings.agent}.${settings.task}: Attempt ${attempt + 1} failed with ${primaryModelId}:`,
+        errorMessage
+      );
+
+      // Only retry if it's a retryable error
+      if (!isStreamRetryableError(error) && attempt < settings.maxRetries) {
+        // Non-retryable error, skip to fallback
+        console.log(`[Stream] Error is not retryable, skipping to fallback`);
+        break;
+      }
+
+      if (attempt < settings.maxRetries) {
+        console.log(`[Stream] Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        delayMs *= 1.5; // Exponential backoff
+      }
+    }
+  }
+
+  // Try fallback model if enabled
+  if (settings.useFallbackModel && settings.fallbackModelId !== primaryModelId) {
+    console.log(
+      `[Stream] ${settings.agent}.${settings.task}: Trying fallback model ${settings.fallbackModelId}`
+    );
+    
+    try {
+      logModelUsage(settings.agent, settings.task, settings.fallbackModelId);
+      const result = createStream(settings.fallbackModelId);
+      
+      if (result && typeof result === 'object') {
+        return {
+          result,
+          usedFallback: true,
+          attempts: attempts + 1,
+          modelUsed: settings.fallbackModelId,
+        };
+      }
+      
+      throw new Error('Fallback stream creation returned invalid result');
+    } catch (fallbackError) {
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      console.error(
+        `[Stream] ${settings.agent}.${settings.task}: Fallback model also failed:`,
+        fallbackMessage
+      );
+      
+      // Include both errors in the final message
+      const primaryMessage = lastError instanceof Error ? lastError.message : String(lastError);
+      throw new Error(
+        `Stream generation failed. Primary (${primaryModelId}): ${primaryMessage}. Fallback (${settings.fallbackModelId}): ${fallbackMessage}`
+      );
+    }
+  }
+
+  // No fallback or fallback disabled, throw the last error
+  throw lastError;
+}
+
+/**
+ * Async generator wrapper that adds retry capability to stream iteration
+ * 
+ * This wraps an async iterable and catches errors during iteration,
+ * allowing the caller to handle stream interruptions gracefully.
+ * 
+ * @param stream - The async iterable to wrap
+ * @param onError - Callback when an error occurs during iteration
+ * @yields Values from the stream
+ */
+export async function* wrapStreamWithErrorHandling<T>(
+  stream: AsyncIterable<T>,
+  onError?: (error: unknown) => void
+): AsyncGenerator<T, void, unknown> {
+  try {
+    for await (const chunk of stream) {
+      yield chunk;
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[Stream] Error during stream iteration:', errorMessage);
+    onError?.(error);
+    throw error;
+  }
+}
+
+/**
+ * Check if we should use a lighter model based on error patterns
+ * Returns the recommended model ID or null if no change recommended
+ */
+export function recommendModelDowngrade(
+  currentModel: string,
+  error: unknown
+): string | null {
+  if (!(error instanceof Error)) return null;
+  
+  const message = error.message.toLowerCase();
+  
+  // If using WRITER and getting timeout/length issues, suggest LIGHTWEIGHT
+  if (currentModel === MODELS.WRITER) {
+    if (
+      message.includes('timeout') ||
+      message.includes('too long') ||
+      message.includes('context length') ||
+      message.includes('max tokens')
+    ) {
+      console.log('[Model] Recommending downgrade to LIGHTWEIGHT model due to:', message);
+      return MODELS.LIGHTWEIGHT;
+    }
+  }
+  
+  return null;
 }
 

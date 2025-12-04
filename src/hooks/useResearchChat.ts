@@ -165,18 +165,27 @@ export function useResearchChat({
       let errorMessage = err.message;
       const msg = err.message.toLowerCase();
       
-      if (msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch')) {
+      // Log original error for debugging
+      console.error('[ResearchChat] Original error:', err.message);
+      
+      // Detect stream interruption errors (most important case)
+      if (msg.includes('incomplete') || msg.includes('chunked') || msg.includes('err_incomplete_chunked_encoding')) {
+        // Stream was interrupted - likely timeout on server side
+        errorMessage = '数据流中断，报告生成可能超时。请刷新页面重试或简化研究问题';
+      } else if (msg.includes('aborted') || msg.includes('terminated') || msg.includes('the operation was aborted')) {
+        // Request was explicitly aborted
+        errorMessage = '请求被中断，可能是超时导致。请刷新页面重试';
+      } else if (msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch') || msg.includes('socket')) {
+        // Network-level errors
         errorMessage = '网络连接失败，请检查网络后重试';
       } else if (msg.includes('401') || msg.includes('unauthorized') || msg.includes('api key')) {
         errorMessage = 'API 认证失败，请检查 API 密钥配置';
       } else if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many')) {
         errorMessage = '请求频率过高，请稍后重试';
       } else if (msg.includes('timeout') || msg.includes('timed out')) {
-        errorMessage = '请求超时，请稍后重试';
+        errorMessage = '请求超时，请稍后重试或简化研究问题';
       } else if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504')) {
         errorMessage = '服务器错误，请稍后重试';
-      } else if (msg.includes('aborted') || msg.includes('terminated')) {
-        errorMessage = '请求被中断';
       }
       
       onError?.(errorMessage);
@@ -463,14 +472,25 @@ export function useResearchChat({
     action: string,
     data?: Record<string, unknown>
   ) => {
+    console.log('[ResearchChat] Responding to checkpoint:', { sessionId, checkpointId, action });
     try {
-      await fetch(`/api/research/sessions/${sessionId}/checkpoint`, {
+      const response = await fetch(`/api/research/sessions/${sessionId}/checkpoint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ checkpointId, action, data }),
       });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        console.error('[ResearchChat] Checkpoint API error:', result);
+        toast.error(result.error || '操作失败，请重试');
+        return;
+      }
+      
+      console.log('[ResearchChat] Checkpoint resolved:', result);
     } catch (err) {
-      console.error('Failed to respond to checkpoint:', err);
+      console.error('[ResearchChat] Failed to respond to checkpoint:', err);
       toast.error('操作失败，请重试');
     }
   }, [sessionId]);

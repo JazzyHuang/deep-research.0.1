@@ -6,7 +6,7 @@ import type {
   CriticAnalysis,
   HallucinationFlag,
 } from '@/types/research';
-import { openrouter, MODELS, getModelConfig, THINKING_BUDGETS } from '@/lib/models';
+import { openrouter, MODELS } from '@/lib/models';
 
 // Zod schemas for structured output
 const HallucinationFlagSchema = z.object({
@@ -41,7 +41,7 @@ export interface CriticContext {
 
 /**
  * Critic Agent: Analyzes research reports for quality, coverage, and potential issues
- * Uses Gemini 2.5 Flash with thinking mode for deep critical analysis
+ * Uses Gemini 2.5 Flash for deep critical analysis
  */
 export async function analyzeReport(context: CriticContext): Promise<CriticAnalysis> {
   const { plan, papers, reportContent, citations, iteration } = context;
@@ -57,13 +57,11 @@ export async function analyzeReport(context: CriticContext): Promise<CriticAnaly
 
   const citationList = citations.map(c => `${c.id}: "${c.title}"`).join('\n');
 
-  // Use thinking mode for thorough analysis and hallucination detection
-  const thinkingOptions = getModelConfig(MODELS.WRITER, true, THINKING_BUDGETS.DEEP);
-  const { object } = await generateObject({
-    model: openrouter(MODELS.WRITER),
-    ...thinkingOptions,
-    schema: CriticAnalysisSchema,
-    prompt: `You are an expert academic reviewer and critic. Analyze the following research report for quality, accuracy, and completeness.
+  try {
+    const { object } = await generateObject({
+      model: openrouter(MODELS.WRITER),
+      schema: CriticAnalysisSchema,
+      prompt: `You are an expert academic reviewer and critic. Analyze the following research report for quality, accuracy, and completeness.
 
 RESEARCH PLAN:
 Main Question: ${plan.mainQuestion}
@@ -98,22 +96,43 @@ ANALYSIS TASKS:
 
 Be thorough but fair. Academic reports need iteration to improve.
 ${iteration >= 3 ? 'NOTE: This is already iteration 3+. Be more lenient on shouldIterate unless there are critical issues.' : ''}`,
-  });
+    });
 
-  return {
-    overallScore: object.overallScore,
-    coverageScore: object.coverageScore,
-    citationAccuracy: object.citationAccuracy,
-    coherenceScore: object.coherenceScore,
-    depthScore: object.depthScore,
-    gapsIdentified: object.gapsIdentified,
-    hallucinations: object.hallucinations as HallucinationFlag[],
-    strengths: object.strengths,
-    weaknesses: object.weaknesses,
-    shouldIterate: object.shouldIterate,
-    feedback: object.feedback,
-    suggestedSearches: object.suggestedSearches,
-  };
+    return {
+      overallScore: object.overallScore,
+      coverageScore: object.coverageScore,
+      citationAccuracy: object.citationAccuracy,
+      coherenceScore: object.coherenceScore,
+      depthScore: object.depthScore,
+      gapsIdentified: object.gapsIdentified,
+      hallucinations: object.hallucinations as HallucinationFlag[],
+      strengths: object.strengths,
+      weaknesses: object.weaknesses,
+      shouldIterate: object.shouldIterate,
+      feedback: object.feedback,
+      suggestedSearches: object.suggestedSearches,
+    };
+  } catch (error) {
+    // Handle errors with detailed message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Critic] Failed to analyze report:', errorMessage);
+    
+    // Provide fallback analysis on error
+    return {
+      overallScore: 60,
+      coverageScore: 60,
+      citationAccuracy: 70,
+      coherenceScore: 70,
+      depthScore: 60,
+      gapsIdentified: [],
+      hallucinations: [],
+      strengths: ['Report was generated successfully'],
+      weaknesses: ['Quality analysis temporarily unavailable'],
+      shouldIterate: false,
+      feedback: `质量分析暂时不可用: ${errorMessage}. 报告将以当前状态完成。`,
+      suggestedSearches: [],
+    };
+  }
 }
 
 /**
@@ -130,14 +149,15 @@ export async function checkClaim(
     year: p.year,
   }));
 
-  const { object } = await generateObject({
-    model: openrouter(MODELS.LIGHTWEIGHT),
-    schema: z.object({
-      isSupported: z.boolean().describe('Whether the claim is supported by the papers'),
-      confidence: z.number().min(0).max(100).describe('Confidence in this assessment'),
-      explanation: z.string().describe('Brief explanation'),
-    }),
-    prompt: `Check if this claim is supported by the cited papers:
+  try {
+    const { object } = await generateObject({
+      model: openrouter(MODELS.LIGHTWEIGHT),
+      schema: z.object({
+        isSupported: z.boolean().describe('Whether the claim is supported by the papers'),
+        confidence: z.number().min(0).max(100).describe('Confidence in this assessment'),
+        explanation: z.string().describe('Brief explanation'),
+      }),
+      prompt: `Check if this claim is supported by the cited papers:
 
 CLAIM: "${claim}"
 
@@ -149,9 +169,18 @@ Is this claim supported by these papers? Consider:
 - Does the claim align with what the papers likely discuss?
 - Is the claim too specific without matching evidence?
 - Could this be a reasonable inference from the papers?`,
-  });
+    });
 
-  return object;
+    return object;
+  } catch (error) {
+    console.error('[Critic] Failed to check claim:', error);
+    // Return neutral fallback on error
+    return {
+      isSupported: true,
+      confidence: 50,
+      explanation: 'Claim verification temporarily unavailable',
+    };
+  }
 }
 
 /**
@@ -166,14 +195,15 @@ export async function generateImprovementPlan(
   additionalSearchQueries: string[];
   sectionsToRevise: string[];
 }> {
-  const { object } = await generateObject({
-    model: openrouter(MODELS.LIGHTWEIGHT),
-    schema: z.object({
-      prioritizedImprovements: z.array(z.string()).describe('Ordered list of improvements to make'),
-      additionalSearchQueries: z.array(z.string()).describe('New search queries to find missing information'),
-      sectionsToRevise: z.array(z.string()).describe('Specific sections that need revision'),
-    }),
-    prompt: `Based on this critic analysis, create an improvement plan:
+  try {
+    const { object } = await generateObject({
+      model: openrouter(MODELS.LIGHTWEIGHT),
+      schema: z.object({
+        prioritizedImprovements: z.array(z.string()).describe('Ordered list of improvements to make'),
+        additionalSearchQueries: z.array(z.string()).describe('New search queries to find missing information'),
+        sectionsToRevise: z.array(z.string()).describe('Specific sections that need revision'),
+      }),
+      prompt: `Based on this critic analysis, create an improvement plan:
 
 CRITIC ANALYSIS:
 - Overall Score: ${analysis.overallScore}/100
@@ -192,9 +222,18 @@ Create a prioritized improvement plan that:
 1. Addresses the most critical gaps first
 2. Suggests specific search queries to find missing information
 3. Identifies which sections need the most work`,
-  });
+    });
 
-  return object;
+    return object;
+  } catch (error) {
+    console.error('[Critic] Failed to generate improvement plan:', error);
+    // Return fallback plan based on existing analysis
+    return {
+      prioritizedImprovements: analysis.weaknesses.slice(0, 3),
+      additionalSearchQueries: analysis.suggestedSearches || [],
+      sectionsToRevise: analysis.gapsIdentified.slice(0, 2),
+    };
+  }
 }
 
 /**

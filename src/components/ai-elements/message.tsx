@@ -36,9 +36,9 @@ interface MessageProps {
 /**
  * Message - Container for user or assistant messages
  * 
- * Redesigned for Deep Research:
- * - User messages: compact, right-aligned with small avatar
- * - Assistant messages: full-width, no avatar, clean text
+ * Redesigned for Deep Research stream layout:
+ * - User messages: left-aligned, no avatar, subtle bubble
+ * - Assistant messages: full-width, no avatar, no bubble (stream style)
  */
 export function Message({ children, from, className }: MessageProps) {
   return (
@@ -46,7 +46,7 @@ export function Message({ children, from, className }: MessageProps) {
       <div
         className={cn(
           'message-enter',
-          from === 'user' && 'flex justify-end',
+          from === 'user' && 'w-full',
           from === 'assistant' && 'w-full',
           className
         )}
@@ -68,29 +68,12 @@ interface MessageAvatarProps {
 }
 
 /**
- * MessageAvatar - Shows avatar for user messages only
- * Assistant messages should not use this component
+ * MessageAvatar - Not used in stream layout
+ * Both user and assistant messages don't show avatars for cleaner flow
  */
-export function MessageAvatar({ src, name, className }: MessageAvatarProps) {
-  const { from } = useMessage();
-  
-  // Don't render avatar for assistant messages (Cursor/Claude style)
-  if (from === 'assistant') {
-    return null;
-  }
-  
-  const initials = name
-    ? name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : 'U';
-  
-  return (
-    <Avatar className={cn('h-7 w-7 shrink-0', className)}>
-      {src && <AvatarImage src={src} alt={name || 'User'} />}
-      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-        {src ? initials : <User className="h-3.5 w-3.5" />}
-      </AvatarFallback>
-    </Avatar>
-  );
+export function MessageAvatar({ className }: MessageAvatarProps) {
+  // Don't render avatars in stream layout for cleaner flow
+  return null;
 }
 
 // ============================================================================
@@ -106,8 +89,9 @@ interface MessageContentProps {
 /**
  * MessageContent - Content wrapper with appropriate styling
  * 
- * - User messages: contained bubble style
- * - Assistant messages: plain text, no bubble
+ * Stream layout design:
+ * - User messages: left-aligned subtle bubble
+ * - Assistant messages: no bubble, clean stream output
  */
 export function MessageContent({ 
   children, 
@@ -120,20 +104,18 @@ export function MessageContent({
   const effectiveVariant = variant ?? (from === 'user' ? 'contained' : 'plain');
   
   return (
-    <div
-      className={cn(
-        from === 'assistant' && 'w-full',
-        from === 'user' && 'flex items-start gap-2',
-        className
-      )}
-    >
+    <div className={cn('w-full', className)}>
       <div className={cn(
         effectiveVariant === 'contained' && from === 'user' && [
-          'bg-primary/10 rounded-2xl px-4 py-2.5',
-          'max-w-[85%] text-sm text-foreground'
+          'inline-block',
+          'bg-primary/8 dark:bg-primary/12',
+          'rounded-2xl px-5 py-3.5',
+          'border border-primary/15',
+          'shadow-sm',
+          'text-[0.9375rem] text-foreground'
         ],
         effectiveVariant === 'plain' && from === 'assistant' && [
-          'text-sm text-foreground leading-relaxed'
+          'text-[0.9375rem] text-foreground leading-relaxed'
         ]
       )}>
         {children}
@@ -171,20 +153,18 @@ export function AssistantMessageWrapper({ children, className }: AssistantMessag
 
 interface UserMessageWrapperProps {
   children: React.ReactNode;
-  avatarSrc?: string;
   className?: string;
 }
 
 /**
- * UserMessageWrapper - Convenient wrapper for user messages with avatar
+ * UserMessageWrapper - Convenient wrapper for user messages (no avatar)
  */
-export function UserMessageWrapper({ children, avatarSrc, className }: UserMessageWrapperProps) {
+export function UserMessageWrapper({ children, className }: UserMessageWrapperProps) {
   return (
     <Message from="user" className={className}>
       <MessageContent variant="contained">
         {children}
       </MessageContent>
-      <MessageAvatar src={avatarSrc} />
     </Message>
   );
 }

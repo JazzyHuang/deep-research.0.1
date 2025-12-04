@@ -59,11 +59,11 @@ Five professional citation styles:
 | Model | Role | Key Capabilities |
 |-------|------|------------------|
 | **Grok 4.1 Fast** | Orchestration & Planning | 2M context window, fast reasoning, tool calling |
-| **Gemini 2.5 Flash** | Writing & Analysis | Deep thinking mode, strong reasoning |
+| **Gemini 2.5 Flash** | Writing & Analysis | Strong reasoning, reliable streaming |
 | **Gemini 2.5 Flash-Lite** | Bulk Tasks | Fastest, cost-efficient, high throughput |
 
 - **Grok 4.1 Fast**: Powers research planning, workflow decisions, and search coordination. Features automatic fallback from free to paid tier.
-- **Gemini 2.5 Flash**: Handles report generation and critical analysis with thinking mode enabled for deeper reasoning.
+- **Gemini 2.5 Flash**: Handles report generation and critical analysis with strong reasoning capabilities.
 - **Gemini 2.5 Flash-Lite**: Processes paper extraction, citation validation, and other repetitive tasks efficiently.
 
 ## 🏗️ Architecture

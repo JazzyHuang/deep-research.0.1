@@ -1,5 +1,16 @@
+// Core types
 export * from './paper';
+
+// Research types (aggregated for backward compatibility)
 export * from './research';
+
+// Specialized type modules (prefer these for new code)
+export * from './search';
+export * from './quality';
+export * from './report';
+export * from './stream';
+export * from './agent-step';
+export * from './session';
 
 // Explicitly export from conversation to avoid name collisions
 export type {

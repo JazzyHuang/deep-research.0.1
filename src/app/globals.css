@@ -3,10 +3,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Custom Fonts - Elegant Academic Typography (preserved) */
+/* ============================================
+   Custom Fonts - Elegant Academic Typography
+   ============================================ */
 @font-face {
   font-family: 'Instrument Serif';
   src: url('https://fonts.gstatic.com/s/instrumentserif/v4/jizBRFtNs2ka5fXjeivQ4LroWlx-2zI.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fraunces - Alternative display serif */
+@font-face {
+  font-family: 'Fraunces';
+  src: url('https://fonts.gstatic.com/s/fraunces/v31/6NUh8FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0K7iN7hzFUPJH58nib14c.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -18,6 +29,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-display: 'Fraunces', 'Instrument Serif', Georgia, serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -51,6 +63,8 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
   
   /* Cursor-style status colors */
   --color-status-running: var(--status-running);
@@ -61,148 +75,167 @@
   /* Diff colors */
   --color-diff-add: var(--diff-add);
   --color-diff-remove: var(--diff-remove);
+  
+  /* Glass effect */
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
 }
 
 /* ============================================
-   Cursor 2.0 Style - Light Theme
+   Deep Research - Light Theme (Refined)
    ============================================ */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   
-  /* Background layers - Cursor light style */
-  --background: #fafafa;
-  --foreground: #171717;
+  /* Background layers - Warm paper-like tones */
+  --background: #fafaf8;
+  --foreground: #1a1a1a;
   
-  /* Cards/Elevated surfaces */
+  /* Cards/Elevated surfaces - Subtle warmth */
   --card: #ffffff;
-  --card-foreground: #171717;
+  --card-foreground: #1a1a1a;
   --popover: #ffffff;
-  --popover-foreground: #171717;
+  --popover-foreground: #1a1a1a;
   
-  /* Primary - Cursor olive/khaki accent */
-  --primary: #6b6b4a;
-  --primary-foreground: #fafafa;
+  /* Primary - Refined olive/sage accent */
+  --primary: #5c6b4a;
+  --primary-foreground: #fafaf8;
   
-  /* Secondary */
-  --secondary: #f5f5f5;
-  --secondary-foreground: #404040;
+  /* Secondary - Warm neutral */
+  --secondary: #f5f5f0;
+  --secondary-foreground: #3d3d3d;
   
-  /* Muted */
-  --muted: #f5f5f5;
-  --muted-foreground: #737373;
+  /* Muted - Soft undertone */
+  --muted: #f0f0eb;
+  --muted-foreground: #6b6b6b;
   
-  /* Accent - Cursor olive style */
-  --accent: #a3a378;
+  /* Accent - Sage green with warmth */
+  --accent: #8b9a6f;
   --accent-foreground: #1a1a1a;
   
   /* Destructive */
-  --destructive: #ef4444;
+  --destructive: #dc3545;
   
-  /* Borders - Subtle */
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #a3a378;
+  /* Borders - Very subtle, almost invisible */
+  --border: rgba(0, 0, 0, 0.06);
+  --input: rgba(0, 0, 0, 0.08);
+  --ring: #8b9a6f;
   
-  /* Status colors */
-  --status-running: #3b82f6;
-  --status-success: #22c55e;
-  --status-error: #ef4444;
-  --status-pending: #6b7280;
+  /* Glass effect */
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  
+  /* Status colors - Harmonized */
+  --status-running: #4a90d9;
+  --status-success: #5c9a5c;
+  --status-error: #d95050;
+  --status-pending: #8b8b8b;
   
   /* Diff colors */
-  --diff-add: #22c55e;
-  --diff-remove: #ef4444;
+  --diff-add: #5c9a5c;
+  --diff-remove: #d95050;
   
-  /* Charts */
-  --chart-1: #6b6b4a;
-  --chart-2: #22c55e;
-  --chart-3: #3b82f6;
-  --chart-4: #a855f7;
-  --chart-5: #f97316;
+  /* Charts - Harmonized palette */
+  --chart-1: #5c6b4a;
+  --chart-2: #5c9a5c;
+  --chart-3: #4a90d9;
+  --chart-4: #9a6bd9;
+  --chart-5: #d98a4a;
   
   /* Sidebar */
-  --sidebar: #fafafa;
-  --sidebar-foreground: #171717;
-  --sidebar-primary: #6b6b4a;
-  --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #f5f5f5;
-  --sidebar-accent-foreground: #404040;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #a3a378;
+  --sidebar: #fafaf8;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #5c6b4a;
+  --sidebar-primary-foreground: #fafaf8;
+  --sidebar-accent: #f5f5f0;
+  --sidebar-accent-foreground: #3d3d3d;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --sidebar-ring: #8b9a6f;
 }
 
 /* ============================================
-   Cursor 2.0 Style - Dark Theme
+   Deep Research - Dark Theme (Refined)
    ============================================ */
 .dark {
-  /* Background layers - Cursor dark style */
-  --background: #0f0f0f;
-  --foreground: #fafafa;
+  /* Background layers - Deep charcoal with slight warmth */
+  --background: #0c0c0c;
+  --foreground: #f0f0eb;
   
-  /* Cards/Elevated surfaces */
-  --card: #1a1a1a;
-  --card-foreground: #fafafa;
+  /* Cards/Elevated surfaces - Layered depth */
+  --card: #161616;
+  --card-foreground: #f0f0eb;
   --popover: #1a1a1a;
-  --popover-foreground: #fafafa;
+  --popover-foreground: #f0f0eb;
   
-  /* Primary - Cursor olive/khaki accent */
-  --primary: #a3a378;
-  --primary-foreground: #0f0f0f;
+  /* Primary - Luminous sage */
+  --primary: #a3b38f;
+  --primary-foreground: #0c0c0c;
   
-  /* Secondary */
-  --secondary: #222222;
-  --secondary-foreground: #a1a1a1;
+  /* Secondary - Subtle elevation */
+  --secondary: #1e1e1e;
+  --secondary-foreground: #b0b0a8;
   
-  /* Muted */
-  --muted: #222222;
-  --muted-foreground: #737373;
+  /* Muted - Soft depth */
+  --muted: #1a1a1a;
+  --muted-foreground: #7a7a75;
   
-  /* Accent */
-  --accent: #a3a378;
-  --accent-foreground: #0f0f0f;
+  /* Accent - Glowing sage */
+  --accent: #a3b38f;
+  --accent-foreground: #0c0c0c;
   
   /* Destructive */
-  --destructive: #ef4444;
+  --destructive: #e85c5c;
   
-  /* Borders - Subtle */
-  --border: #2d2d2d;
-  --input: #222222;
-  --ring: #a3a378;
+  /* Borders - Subtle glow edges */
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #a3b38f;
+  
+  /* Glass effect */
+  --glass: rgba(22, 22, 22, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.08);
   
   /* Status colors */
-  --status-running: #3b82f6;
-  --status-success: #22c55e;
-  --status-error: #ef4444;
-  --status-pending: #6b7280;
+  --status-running: #5a9ee0;
+  --status-success: #6aaa6a;
+  --status-error: #e86a6a;
+  --status-pending: #7a7a7a;
   
   /* Diff colors */
-  --diff-add: #4ade80;
-  --diff-remove: #f87171;
+  --diff-add: #6aaa6a;
+  --diff-remove: #e86a6a;
   
   /* Charts */
-  --chart-1: #a3a378;
-  --chart-2: #4ade80;
-  --chart-3: #60a5fa;
-  --chart-4: #c084fc;
-  --chart-5: #fb923c;
+  --chart-1: #a3b38f;
+  --chart-2: #6aaa6a;
+  --chart-3: #5a9ee0;
+  --chart-4: #b08ae0;
+  --chart-5: #e0a05a;
   
   /* Sidebar */
-  --sidebar: #141414;
-  --sidebar-foreground: #fafafa;
-  --sidebar-primary: #a3a378;
-  --sidebar-primary-foreground: #0f0f0f;
-  --sidebar-accent: #222222;
-  --sidebar-accent-foreground: #a1a1a1;
-  --sidebar-border: #2d2d2d;
-  --sidebar-ring: #a3a378;
+  --sidebar: #111111;
+  --sidebar-foreground: #f0f0eb;
+  --sidebar-primary: #a3b38f;
+  --sidebar-primary-foreground: #0c0c0c;
+  --sidebar-accent: #1e1e1e;
+  --sidebar-accent-foreground: #b0b0a8;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #a3b38f;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  
   body {
     @apply bg-background text-foreground antialiased;
+    /* Subtle noise texture overlay */
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.02'/%3E%3C/svg%3E");
+  }
+  
+  .dark body {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
   }
   
   /* Container centering for Tailwind v4 */
@@ -229,16 +262,98 @@
     }
   }
   
-  /* Academic typography for headings (preserved) */
+  /* Academic typography for headings */
   h1, h2, h3 {
     font-family: var(--font-serif);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
+    font-weight: 400;
+  }
+  
+  h1 {
+    @apply text-3xl md:text-4xl;
+  }
+  
+  h2 {
+    @apply text-2xl md:text-3xl;
+  }
+  
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
+  
+  /* Selection styling */
+  ::selection {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+  
+  /* Focus visible styling */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
 @layer utilities {
   /* ============================================
-     Cursor-style Streaming & Animation
+     Glassmorphism & Modern Effects
+     ============================================ */
+  
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+  }
+  
+  .glass-subtle {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+  
+  .glass-card {
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.05),
+      0 2px 4px -2px rgba(0, 0, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  .dark .glass-card {
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -2px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  
+  /* Floating Input Capsule */
+  .floating-capsule {
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: 1.5rem;
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.15),
+      0 12px 24px -8px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+  
+  .dark .floating-capsule {
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.5),
+      0 12px 24px -8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  
+  /* ============================================
+     Streaming & Animation Effects
      ============================================ */
   
   /* Cursor blink animation for streaming */
@@ -251,27 +366,28 @@
     animation: cursor-blink 1s step-end infinite;
   }
   
-  /* Streaming cursor - Cursor 2.0 style */
+  /* Streaming cursor - refined */
   .streaming-cursor::after {
     content: '';
     display: inline-block;
     width: 2px;
-    height: 1em;
-    background-color: var(--accent);
+    height: 1.1em;
+    background: linear-gradient(to bottom, var(--primary), var(--accent));
     margin-left: 2px;
     vertical-align: text-bottom;
+    border-radius: 1px;
     animation: cursor-blink 1s step-end infinite;
   }
   
-  /* Message fade-in animation */
+  /* Message fade-in animation - refined */
   .message-enter {
-    animation: messageIn 200ms ease-out;
+    animation: messageIn 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes messageIn {
     from { 
       opacity: 0; 
-      transform: translateY(8px); 
+      transform: translateY(12px); 
     }
     to { 
       opacity: 1; 
@@ -281,17 +397,42 @@
   
   /* Word-by-word streaming animation */
   .stream-word {
-    animation: wordFadeIn 150ms ease-out;
+    animation: wordFadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes wordFadeIn {
     from { 
       opacity: 0; 
-      transform: translateY(2px); 
+      transform: translateY(4px); 
     }
     to { 
       opacity: 1; 
       transform: translateY(0); 
+    }
+  }
+  
+  /* Staggered reveal animation */
+  .stagger-reveal > * {
+    animation: staggerReveal 400ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  
+  .stagger-reveal > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-reveal > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-reveal > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-reveal > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-reveal > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-reveal > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-reveal > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-reveal > *:nth-child(8) { animation-delay: 350ms; }
+  
+  @keyframes staggerReveal {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
   
@@ -301,29 +442,67 @@
   
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, var(--accent), #b4b488);
+    background-image: linear-gradient(135deg, var(--primary), var(--accent));
   }
   
-  /* Subtle paper texture (preserved for light mode) */
+  .text-gradient-subtle {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--foreground), var(--muted-foreground));
+  }
+  
+  /* Subtle paper texture */
   .paper-texture {
     background-image: 
-      radial-gradient(ellipse at 20% 30%, rgba(245, 245, 245, 0.5) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 70%, rgba(245, 245, 245, 0.3) 0%, transparent 50%);
+      radial-gradient(ellipse at 20% 30%, rgba(140, 155, 111, 0.03) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, rgba(140, 155, 111, 0.02) 0%, transparent 50%);
   }
   
   .dark .paper-texture {
     background-image: 
-      radial-gradient(ellipse at 20% 30%, rgba(34, 34, 34, 0.5) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 70%, rgba(26, 26, 26, 0.3) 0%, transparent 50%);
+      radial-gradient(ellipse at 20% 30%, rgba(163, 179, 143, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, rgba(163, 179, 143, 0.02) 0%, transparent 50%);
   }
   
-  /* Glow effects - Cursor style */
+  /* Glow effects */
   .glow-primary {
-    box-shadow: 0 0 40px rgba(163, 163, 120, 0.15);
+    box-shadow: 0 0 60px rgba(92, 107, 74, 0.12);
+  }
+  
+  .dark .glow-primary {
+    box-shadow: 0 0 60px rgba(163, 179, 143, 0.1);
   }
   
   .glow-accent {
-    box-shadow: 0 0 20px rgba(163, 163, 120, 0.2);
+    box-shadow: 0 0 30px rgba(139, 154, 111, 0.15);
+  }
+  
+  .dark .glow-accent {
+    box-shadow: 0 0 30px rgba(163, 179, 143, 0.12);
+  }
+  
+  /* Ambient glow for active elements */
+  .glow-ambient {
+    position: relative;
+  }
+  
+  .glow-ambient::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(139, 154, 111, 0.15) 0%,
+      transparent 70%
+    );
+    filter: blur(20px);
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  
+  .glow-ambient:hover::before,
+  .glow-ambient:focus-within::before {
+    opacity: 1;
   }
   
   /* ============================================
@@ -331,20 +510,46 @@
      ============================================ */
   
   .research-card {
-    @apply transition-all duration-200;
+    @apply transition-all duration-300;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .research-card:hover {
-    @apply -translate-y-0.5;
+    @apply -translate-y-1;
     box-shadow: 
-      0 4px 20px rgba(0, 0, 0, 0.08),
-      0 2px 8px rgba(0, 0, 0, 0.04);
+      0 20px 40px -15px rgba(0, 0, 0, 0.1),
+      0 8px 16px -8px rgba(0, 0, 0, 0.08);
   }
   
   .dark .research-card:hover {
     box-shadow: 
-      0 4px 20px rgba(0, 0, 0, 0.3),
-      0 2px 8px rgba(0, 0, 0, 0.2);
+      0 20px 40px -15px rgba(0, 0, 0, 0.4),
+      0 8px 16px -8px rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  
+  /* Interactive card with subtle press effect */
+  .interactive-card {
+    @apply transition-all duration-150;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .interactive-card:hover {
+    @apply -translate-y-0.5;
+  }
+  
+  .interactive-card:active {
+    transform: scale(0.98) translateY(0);
+  }
+  
+  /* Minimal border card */
+  .card-minimal {
+    @apply bg-transparent border-0;
+    box-shadow: none;
+  }
+  
+  .card-minimal:hover {
+    @apply bg-muted/30;
   }
   
   /* ============================================
@@ -440,21 +645,72 @@
      ============================================ */
   
   .animate-collapsible-down {
-    animation: collapsibleDown 200ms ease-out;
+    animation: collapsibleDown 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .animate-collapsible-up {
-    animation: collapsibleUp 200ms ease-out;
+    animation: collapsibleUp 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes collapsibleDown {
-    from { height: 0; opacity: 0; }
-    to { height: var(--radix-collapsible-content-height); opacity: 1; }
+    from { 
+      height: 0; 
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to { 
+      height: var(--radix-collapsible-content-height); 
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   
   @keyframes collapsibleUp {
-    from { height: var(--radix-collapsible-content-height); opacity: 1; }
-    to { height: 0; opacity: 0; }
+    from { 
+      height: var(--radix-collapsible-content-height); 
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to { 
+      height: 0; 
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+  }
+  
+  /* Spring animation for accordions */
+  .accordion-content {
+    overflow: hidden;
+  }
+  
+  .accordion-content[data-state="open"] {
+    animation: accordionOpen 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .accordion-content[data-state="closed"] {
+    animation: accordionClose 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes accordionOpen {
+    from {
+      height: 0;
+      opacity: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes accordionClose {
+    from {
+      height: var(--radix-accordion-content-height);
+      opacity: 1;
+    }
+    to {
+      height: 0;
+      opacity: 0;
+    }
   }
   
   /* ============================================
@@ -462,17 +718,17 @@
      ============================================ */
   
   .execution-step-enter {
-    animation: stepFadeIn 300ms ease-out;
+    animation: stepFadeIn 400ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes stepFadeIn {
     from {
       opacity: 0;
-      transform: translateY(-8px);
+      transform: translateX(-12px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateX(0);
     }
   }
   
@@ -482,20 +738,34 @@
   
   @keyframes stepPulse {
     0%, 100% {
-      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+      box-shadow: 0 0 0 0 rgba(92, 107, 74, 0.4);
     }
     50% {
-      box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+      box-shadow: 0 0 0 8px rgba(92, 107, 74, 0);
+    }
+  }
+  
+  .dark .step-running {
+    animation: stepPulseDark 2s ease-in-out infinite;
+  }
+  
+  @keyframes stepPulseDark {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(163, 179, 143, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(163, 179, 143, 0);
     }
   }
   
   .timeline-connector {
-    @apply bg-border transition-all duration-300;
+    @apply transition-all duration-500;
+    background: linear-gradient(to bottom, var(--border), transparent);
   }
   
   .timeline-connector-active {
-    @apply bg-accent/40;
-    animation: connectorGrow 300ms ease-out;
+    background: linear-gradient(to bottom, var(--primary), transparent);
+    animation: connectorGrow 500ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes connectorGrow {
@@ -509,17 +779,24 @@
     }
   }
   
+  /* Thinking animation - organic pulse */
   .step-icon-thinking {
-    animation: thinkingPulse 1.5s ease-in-out infinite;
+    animation: thinkingPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
   
   @keyframes thinkingPulse {
-    0%, 100% { opacity: 0.7; }
-    50% { opacity: 1; }
+    0%, 100% { 
+      opacity: 0.6; 
+      transform: scale(0.95);
+    }
+    50% { 
+      opacity: 1; 
+      transform: scale(1.05);
+    }
   }
   
   .step-icon-tool {
-    animation: toolSpin 2s linear infinite;
+    animation: toolSpin 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
   
   @keyframes toolSpin {
@@ -528,37 +805,38 @@
   }
   
   .status-badge {
-    @apply transition-all duration-200;
+    @apply transition-all duration-300;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .status-badge-success {
-    animation: statusSuccess 400ms ease-out;
+    animation: statusSuccess 500ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes statusSuccess {
-    0% { transform: scale(0.8); opacity: 0; }
-    50% { transform: scale(1.1); }
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.15); }
     100% { transform: scale(1); opacity: 1; }
   }
   
   .status-badge-error {
-    animation: statusError 400ms ease-out;
+    animation: statusError 500ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes statusError {
-    0%, 50%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-2px); }
-    75% { transform: translateX(2px); }
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-3px); }
+    40%, 80% { transform: translateX(3px); }
   }
   
   .log-entry-enter {
-    animation: logFadeIn 200ms ease-out;
+    animation: logFadeIn 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes logFadeIn {
     from {
       opacity: 0;
-      transform: translateX(-4px);
+      transform: translateX(-8px);
     }
     to {
       opacity: 1;
@@ -568,16 +846,19 @@
   
   .chevron-expanded {
     transform: rotate(90deg);
-    @apply transition-transform duration-200;
+    @apply transition-transform duration-300;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .chevron-collapsed {
     transform: rotate(0deg);
-    @apply transition-transform duration-200;
+    @apply transition-transform duration-300;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .tree-connector-vertical {
-    @apply absolute left-[-16px] top-0 w-px bg-border;
+    @apply absolute left-[-16px] top-0 w-px;
+    background: linear-gradient(to bottom, var(--border), transparent);
   }
   
   .tree-connector-horizontal {
@@ -589,14 +870,20 @@
   }
   
   .execution-step-active {
-    @apply shadow-md;
     box-shadow: 
-      0 0 20px rgba(163, 163, 120, 0.15),
-      0 4px 12px rgba(0, 0, 0, 0.1);
+      0 0 30px rgba(92, 107, 74, 0.1),
+      0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+  
+  .dark .execution-step-active {
+    box-shadow: 
+      0 0 30px rgba(163, 179, 143, 0.08),
+      0 4px 16px rgba(0, 0, 0, 0.3);
   }
   
   .compact-timeline-item {
     @apply transition-all duration-200;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .compact-timeline-item:hover {
@@ -1023,17 +1310,24 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: var(--border);
+    border-radius: 1px;
+    background: linear-gradient(
+      to bottom,
+      var(--primary) 0%,
+      var(--border) 100%
+    );
+    opacity: 0.3;
   }
   
   .vertical-timeline-item {
-    @apply relative pl-6;
+    @apply relative pl-7;
   }
   
   .vertical-timeline-dot {
     @apply absolute left-0 w-4 h-4 rounded-full flex items-center justify-center;
     @apply bg-background border-2 border-muted;
     top: 2px;
+    transition: all 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   .vertical-timeline-dot.active {
@@ -1042,19 +1336,64 @@
   
   .vertical-timeline-dot.complete {
     @apply border-primary bg-primary text-primary-foreground;
+    animation: dotComplete 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes dotComplete {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
   }
   
   .vertical-timeline-dot.running {
     @apply border-primary;
-    animation: timelineDotPulse 1.5s ease-in-out infinite;
+    animation: timelineDotPulse 2s ease-in-out infinite;
   }
   
   @keyframes timelineDotPulse {
     0%, 100% {
-      box-shadow: 0 0 0 0 rgba(163, 163, 120, 0.4);
+      box-shadow: 0 0 0 0 rgba(92, 107, 74, 0.5);
+      transform: scale(1);
     }
     50% {
-      box-shadow: 0 0 0 6px rgba(163, 163, 120, 0);
+      box-shadow: 0 0 0 8px rgba(92, 107, 74, 0);
+      transform: scale(1.1);
+    }
+  }
+  
+  .dark .vertical-timeline-dot.running {
+    animation: timelineDotPulseDark 2s ease-in-out infinite;
+  }
+  
+  @keyframes timelineDotPulseDark {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(163, 179, 143, 0.5);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(163, 179, 143, 0);
+      transform: scale(1.1);
+    }
+  }
+  
+  /* Connected step line animation */
+  .timeline-line-fill {
+    position: absolute;
+    left: 7px;
+    top: 0;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--primary);
+    animation: lineFill 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transform-origin: top;
+  }
+  
+  @keyframes lineFill {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
     }
   }
   
@@ -1063,58 +1402,28 @@
      ============================================ */
   
   .thinking-text {
-    @apply text-xs text-muted-foreground/60 leading-snug;
+    @apply text-xs text-muted-foreground/60 leading-relaxed;
     font-family: var(--font-mono);
   }
   
   .thinking-collapsed {
-    @apply flex items-center gap-2 py-1.5 cursor-pointer;
-    @apply text-xs text-muted-foreground/50 hover:text-muted-foreground/70;
-    @apply transition-colors duration-150;
+    @apply flex items-center gap-2.5 py-2 px-3 cursor-pointer;
+    @apply text-xs text-muted-foreground/60 hover:text-muted-foreground;
+    @apply transition-all duration-200 rounded-lg;
+    @apply hover:bg-muted/50;
   }
   
   .thinking-expanded {
-    @apply py-2 px-0;
-    max-height: 200px;
+    @apply py-3 px-4;
+    max-height: 300px;
     overflow-y: auto;
   }
   
   .thinking-container {
-    animation: thinkingFadeIn 200ms ease-out;
+    animation: thinkingFadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   @keyframes thinkingFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  /* Thinking cursor blink */
-  .thinking-cursor {
-    @apply inline-block w-1.5 h-3.5 ml-0.5 align-text-bottom;
-    @apply bg-muted-foreground/40;
-    animation: thinkingCursorBlink 0.8s step-end infinite;
-  }
-  
-  @keyframes thinkingCursorBlink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
-  
-  /* ============================================
-     Reasoning Part Styles
-     ============================================ */
-  
-  .reasoning-container {
-    animation: reasoningFadeIn 300ms ease-out;
-  }
-  
-  @keyframes reasoningFadeIn {
     from {
       opacity: 0;
       transform: translateY(-8px);
@@ -1125,19 +1434,147 @@
     }
   }
   
+  /* Thinking cursor blink - organic feel */
+  .thinking-cursor {
+    @apply inline-block w-0.5 h-4 ml-1 align-text-bottom rounded-full;
+    background: linear-gradient(to bottom, var(--primary), var(--accent));
+    animation: thinkingCursorBlink 1s ease-in-out infinite;
+  }
+  
+  @keyframes thinkingCursorBlink {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+  
+  /* Thinking accordion header */
+  .thinking-header {
+    @apply flex items-center gap-2.5 py-2.5 px-3.5;
+    @apply text-sm rounded-xl;
+    @apply bg-muted/30 hover:bg-muted/50;
+    @apply transition-all duration-200;
+    @apply cursor-pointer select-none;
+  }
+  
+  .thinking-header[data-state="streaming"] {
+    @apply bg-primary/5 border border-primary/20;
+  }
+  
+  /* Brain icon animation during thinking */
+  .thinking-brain {
+    animation: brainPulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes brainPulse {
+    0%, 100% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  }
+  
+  /* Typing dots animation */
+  .typing-dots {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+  }
+  
+  .typing-dots span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+    animation: typingDot 1.4s ease-in-out infinite;
+  }
+  
+  .typing-dots span:nth-child(1) { animation-delay: 0ms; }
+  .typing-dots span:nth-child(2) { animation-delay: 160ms; }
+  .typing-dots span:nth-child(3) { animation-delay: 320ms; }
+  
+  @keyframes typingDot {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+  
+  /* ============================================
+     Reasoning Part Styles
+     ============================================ */
+  
+  .reasoning-container {
+    animation: reasoningFadeIn 400ms cubic-bezier(0.16, 1, 0.3, 1);
+    @apply rounded-xl overflow-hidden;
+  }
+  
+  @keyframes reasoningFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
   .reasoning-collapsed {
-    animation: reasoningCollapse 200ms ease-out;
+    animation: reasoningCollapse 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes reasoningCollapse {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0.8;
+      transform: scale(0.98);
+    }
   }
   
   .reasoning-text {
     font-family: var(--font-mono);
-    line-height: 1.6;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    @apply text-muted-foreground/70;
+  }
+  
+  .reasoning-text[data-streaming="true"] {
+    @apply text-foreground/80;
   }
   
   .reasoning-cursor {
-    @apply inline-block w-1.5 h-4 ml-0.5 align-text-bottom;
-    @apply bg-primary/60;
-    animation: thinkingCursorBlink 0.8s step-end infinite;
+    @apply inline-block w-0.5 h-4 ml-1 align-text-bottom rounded-full;
+    background: linear-gradient(to bottom, var(--primary), var(--accent));
+    animation: reasoningCursorBlink 1s ease-in-out infinite;
+  }
+  
+  @keyframes reasoningCursorBlink {
+    0%, 100% { opacity: 0.3; transform: scaleY(0.9); }
+    50% { opacity: 1; transform: scaleY(1); }
+  }
+  
+  /* Reasoning accordion styling */
+  .reasoning-accordion {
+    @apply rounded-xl border border-border/50 overflow-hidden;
+    @apply bg-muted/20;
+    transition: all 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .reasoning-accordion:hover {
+    @apply border-border;
+  }
+  
+  .reasoning-accordion[data-state="streaming"] {
+    @apply border-primary/30 bg-primary/5;
   }
   
   /* ============================================
@@ -1357,5 +1794,185 @@
     to {
       opacity: 1;
     }
+  }
+  
+  /* ============================================
+     Research Stream Layout Styles
+     ============================================ */
+  
+  /* Main stream container */
+  .research-stream {
+    @apply relative;
+  }
+  
+  /* Stream item base - subtle entrance animation */
+  .stream-item {
+    animation: streamItemEnter 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes streamItemEnter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* User message in stream - subtle bubble */
+  .stream-user-message {
+    @apply relative;
+  }
+  
+  .stream-user-message::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    max-height: 40px;
+    border-radius: 2px;
+    background: var(--primary);
+    opacity: 0.4;
+  }
+  
+  /* Agent steps group in stream */
+  .stream-steps-group {
+    @apply relative pl-1;
+  }
+  
+  /* Individual agent step in stream */
+  .stream-step {
+    animation: streamStepEnter 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes streamStepEnter {
+    from {
+      opacity: 0;
+      transform: translateX(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  /* Step pulse animation for running steps */
+  .stream-step-pulse {
+    animation: streamStepPulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes streamStepPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(var(--primary), 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(var(--primary), 0);
+    }
+  }
+  
+  /* Card in stream - bubble wrapper */
+  .stream-card {
+    @apply relative;
+    animation: streamCardEnter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes streamCardEnter {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  /* Card hover lift effect */
+  .stream-card:hover {
+    transform: translateY(-2px);
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  /* Checkpoint in stream - prominent styling */
+  .stream-checkpoint {
+    @apply relative;
+    animation: streamCheckpointEnter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes streamCheckpointEnter {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  /* Assistant content in stream - no bubble */
+  .stream-assistant-content {
+    @apply relative;
+  }
+  
+  /* Timeline connector between steps */
+  .stream-connector {
+    position: absolute;
+    left: 9px;
+    width: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+      to bottom,
+      var(--primary) 0%,
+      transparent 100%
+    );
+    opacity: 0.3;
+    transition: opacity 300ms ease;
+  }
+  
+  .stream-connector.active {
+    opacity: 0.6;
+    background: linear-gradient(
+      to bottom,
+      var(--primary) 0%,
+      var(--primary) 60%,
+      transparent 100%
+    );
+  }
+  
+  /* Stream section spacing */
+  .stream-section {
+    @apply py-2;
+  }
+  
+  .stream-section-card {
+    @apply py-3;
+  }
+  
+  /* Stream text content styling */
+  .stream-text {
+    @apply text-[0.9375rem] leading-relaxed text-foreground/90;
+  }
+  
+  /* Stream reasoning/thinking indicator */
+  .stream-thinking {
+    @apply relative pl-4;
+  }
+  
+  .stream-thinking::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--muted-foreground);
+    opacity: 0.3;
   }
 }

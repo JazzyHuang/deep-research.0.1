@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Brain, ChevronRight, ChevronDown, Maximize2 } from 'lucide-react';
+import { Brain, ChevronRight, ChevronDown, Maximize2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ReasoningPartProps {
@@ -12,13 +12,13 @@ interface ReasoningPartProps {
 }
 
 /**
- * ReasoningPart - Enhanced AI reasoning/thinking display
+ * ReasoningPart - Modern AI reasoning/thinking display
  * 
- * Redesigned for better visibility:
- * - More prominent during streaming
- * - Larger font and better contrast
- * - Smart collapse behavior (doesn't auto-collapse during active research)
- * - "View Full" button for long content
+ * Features:
+ * - Animated accordion with spring transitions
+ * - Pulsing "thinking" indicator during streaming
+ * - Smart auto-collapse with user preference memory
+ * - Full-view modal for long content
  */
 export function ReasoningPart({ 
   text, 
@@ -29,9 +29,8 @@ export function ReasoningPart({
   const isStreaming = state === 'streaming';
   const isComplete = state === 'done';
   
-  // Don't auto-collapse during streaming or shortly after
   const [isExpanded, setIsExpanded] = useState(true);
-  const [hasBeenCollapsed, setHasBeenCollapsed] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [startTime] = useState(Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -55,117 +54,140 @@ export function ReasoningPart({
     return () => clearInterval(interval);
   }, [isStreaming, startTime]);
   
-  // Only collapse after a delay when complete and user hasn't interacted
+  // Auto-collapse after completion (with delay)
   useEffect(() => {
-    if (isComplete && !hasBeenCollapsed) {
-      // Auto-collapse after 3 seconds of completion
+    if (isComplete && !hasUserInteracted) {
       const timer = setTimeout(() => {
         setIsExpanded(false);
-        setHasBeenCollapsed(true);
-      }, 3000);
+      }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [isComplete, hasBeenCollapsed]);
+  }, [isComplete, hasUserInteracted]);
   
   const handleToggle = useCallback(() => {
     setIsExpanded(prev => !prev);
-    setHasBeenCollapsed(true);
+    setHasUserInteracted(true);
   }, []);
   
   const displayDuration = duration ?? elapsedSeconds;
-  const isLongContent = text.length > 500;
-  
-  // Collapsed state - single line with expand button
-  if (!isExpanded && isComplete) {
-    return (
-      <div 
-        className={cn('reasoning-collapsed cursor-pointer group', className)}
-        onClick={handleToggle}
-      >
-        <div className="flex items-center gap-2.5 py-2 px-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
-          <Brain className="w-3.5 h-3.5 text-primary/60" />
-          <span className="text-sm text-muted-foreground">
-            思考了 {displayDuration}s
-          </span>
-          <span className="text-xs text-muted-foreground/50 ml-auto">
-            点击展开
-          </span>
-        </div>
-      </div>
-    );
-  }
+  const isLongContent = text.length > 600;
+  const wordCount = text.split(/\s+/).length;
   
   return (
-    <div className={cn('reasoning-container', className)}>
-      {/* Header */}
+    <div 
+      className={cn(
+        'reasoning-accordion',
+        isStreaming && 'reasoning-accordion-streaming',
+        className
+      )}
+      data-state={isStreaming ? 'streaming' : isComplete ? 'complete' : 'idle'}
+    >
+      {/* Header - Always visible */}
       <button
         onClick={handleToggle}
         className={cn(
-          'w-full flex items-center gap-2.5 py-2 px-3 rounded-t-lg',
-          'bg-muted/30 hover:bg-muted/50 transition-colors',
-          !isStreaming && 'cursor-pointer'
+          'w-full flex items-center gap-3 py-3 px-4',
+          'transition-all duration-200',
+          'hover:bg-muted/30',
+          isExpanded && 'border-b border-border/30'
         )}
         disabled={isStreaming}
       >
-        {isComplete ? (
-          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/60" />
-        ) : (
-          <div className="w-3.5 h-3.5" />
-        )}
-        
-        <Brain className={cn(
-          'w-3.5 h-3.5',
-          isStreaming ? 'text-primary animate-pulse' : 'text-primary/60'
-        )} />
-        
-        <span className={cn(
-          'text-sm font-medium',
-          isStreaming ? 'text-foreground' : 'text-muted-foreground'
+        {/* Expand/Collapse Indicator */}
+        <div className={cn(
+          'transition-transform duration-300',
+          isExpanded && 'rotate-90'
         )}>
-          {isStreaming ? '正在思考...' : `思考了 ${displayDuration}s`}
-        </span>
+          <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
+        </div>
         
-        {/* Full view button for long content */}
-        {isLongContent && !isStreaming && (
+        {/* Brain Icon with Animation */}
+        <div className="relative">
+          <Brain className={cn(
+            'w-4 h-4 transition-colors duration-300',
+            isStreaming ? 'text-primary thinking-brain' : 'text-primary/50'
+          )} />
+          {isStreaming && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary animate-ping" />
+          )}
+        </div>
+        
+        {/* Label */}
+        <div className="flex-1 flex items-center gap-2 text-left">
+          {isStreaming ? (
+            <span className="text-sm font-medium text-foreground flex items-center gap-2">
+              思考中
+              <span className="typing-dots">
+                <span />
+                <span />
+                <span />
+              </span>
+            </span>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              思考过程
+              <span className="mx-1.5 text-muted-foreground/40">·</span>
+              <span className="text-xs">{displayDuration}s</span>
+              {wordCount > 50 && (
+                <>
+                  <span className="mx-1.5 text-muted-foreground/40">·</span>
+                  <span className="text-xs">{wordCount} 字</span>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+        
+        {/* Actions */}
+        {!isStreaming && isLongContent && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShowFullView(true);
             }}
-            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-md",
+              "text-xs text-muted-foreground/60",
+              "hover:text-muted-foreground hover:bg-muted/50",
+              "transition-colors duration-150"
+            )}
           >
             <Maximize2 className="w-3 h-3" />
-            查看全部
+            展开
           </button>
         )}
       </button>
       
-      {/* Content */}
-      <div
-        ref={contentRef}
-        className={cn(
-          'px-3 pb-3 pt-2 rounded-b-lg bg-muted/20',
-          'max-h-60 overflow-y-auto scrollbar-thin'
-        )}
-      >
-        <div className={cn(
-          'reasoning-text whitespace-pre-wrap',
-          isStreaming ? 'text-sm text-foreground/80' : 'text-sm text-muted-foreground/70'
-        )}>
-          {text}
-          {/* Streaming cursor */}
-          {isStreaming && (
-            <span className="reasoning-cursor" />
+      {/* Content - Collapsible */}
+      <div className={cn(
+        'overflow-hidden transition-all duration-300',
+        isExpanded ? 'max-h-[300px] opacity-100' : 'max-h-0 opacity-0'
+      )}>
+        <div
+          ref={contentRef}
+          className={cn(
+            'px-4 py-3 max-h-[280px] overflow-y-auto scrollbar-thin'
           )}
+        >
+          <div 
+            className={cn(
+              'reasoning-text whitespace-pre-wrap',
+              isStreaming && 'text-foreground/80'
+            )}
+            data-streaming={isStreaming}
+          >
+            {text}
+            {isStreaming && <span className="reasoning-cursor" />}
+          </div>
         </div>
       </div>
       
-      {/* Full view modal */}
+      {/* Full View Modal */}
       {showFullView && (
         <FullViewModal 
           text={text} 
           duration={displayDuration}
+          wordCount={wordCount}
           onClose={() => setShowFullView(false)} 
         />
       )}
@@ -176,52 +198,97 @@ export function ReasoningPart({
 interface FullViewModalProps {
   text: string;
   duration: number;
+  wordCount: number;
   onClose: () => void;
 }
 
-function FullViewModal({ text, duration, onClose }: FullViewModalProps) {
-  // Close on escape key
+function FullViewModal({ text, duration, wordCount, onClose }: FullViewModalProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
     
+    document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [onClose]);
   
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center p-4",
+        "bg-background/60 backdrop-blur-md",
+        "animate-in fade-in duration-200"
+      )}
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-2xl max-h-[80vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className={cn(
+          "w-full max-w-2xl max-h-[85vh]",
+          "bg-card border border-border/50",
+          "rounded-2xl shadow-2xl overflow-hidden",
+          "animate-in zoom-in-95 slide-in-from-bottom-2 duration-300"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
-          <Brain className="w-4 h-4 text-primary/60" />
-          <span className="text-sm font-medium">完整思考过程</span>
-          <span className="text-xs text-muted-foreground/60 ml-auto">
-            {duration}s
-          </span>
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 bg-muted/20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Brain className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium">完整思考过程</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {duration}s · {wordCount} 字
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className={cn(
+              "p-2 rounded-lg",
+              "text-muted-foreground hover:text-foreground",
+              "hover:bg-muted/50 transition-colors"
+            )}
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
         
-        {/* Modal content */}
-        <div className="p-4 max-h-[60vh] overflow-y-auto">
-          <div className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
+        {/* Modal Content */}
+        <div className="p-5 max-h-[60vh] overflow-y-auto scrollbar-thin">
+          <div className="text-sm text-foreground/85 whitespace-pre-wrap leading-[1.8] font-mono">
             {text}
           </div>
         </div>
         
-        {/* Modal footer */}
-        <div className="px-4 py-3 border-t border-border bg-muted/20">
+        {/* Modal Footer */}
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-border/50 bg-muted/10">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(text);
+            }}
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm",
+              "text-muted-foreground hover:text-foreground",
+              "border border-border/50 hover:border-border",
+              "transition-colors"
+            )}
+          >
+            复制内容
+          </button>
           <button
             onClick={onClose}
-            className="w-full py-2 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium",
+              "bg-primary text-primary-foreground",
+              "hover:bg-primary/90 transition-colors"
+            )}
           >
             关闭
           </button>

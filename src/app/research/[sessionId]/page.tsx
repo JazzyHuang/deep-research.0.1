@@ -1,17 +1,16 @@
 'use client';
 
 /**
- * ResearchSessionPage - AI SDK v5 Implementation
+ * ResearchSessionPage - Stream-based UI Implementation
  * 
- * Redesigned for better UI/UX:
- * - Sticky progress header showing research stages
- * - Agent timeline positioned before text output
- * - Clean message layout without assistant avatars
- * - Enhanced checkpoint and card animations
- * - Floating progress indicator
+ * Redesigned for continuous stream layout:
+ * - User message at top with subtle bubble
+ * - Agent steps inline (no bubble) with timeline connector
+ * - Interactive cards with clear borders
+ * - Smooth flow: User → Agent output → Card → Agent output → Card
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useResearchChat } from '@/hooks/useResearchChat';
 import {
@@ -19,9 +18,6 @@ import {
   ConversationContent,
   ConversationScrollButton,
   ConversationEmptyState,
-  Message,
-  MessageContent,
-  MessageAvatar,
   PromptInput,
   PromptInputTextarea,
   PromptInputSubmit,
@@ -29,20 +25,18 @@ import {
   Loader,
   ResearchLoader,
 } from '@/components/ai-elements';
-import { MessagePartsRenderer } from '@/components/research-chat/parts';
 import { SidePanel } from '@/components/sidebar';
 import { HistorySidebar, type HistoryItemData } from '@/components/history-sidebar';
 import { 
-  AgentTimeline, 
   ProgressHeader, 
   deriveStageFromSteps,
   FloatingProgress,
-  TodoProgress 
+  TodoProgress,
+  ResearchStream,
 } from '@/components/research-chat';
-import { Settings, Download, PanelLeftClose, PanelLeft, ArrowLeft, Square } from 'lucide-react';
+import { Settings, Download, PanelLeftClose, PanelLeft, ArrowLeft, Square, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { UIMessage } from 'ai';
 import type { InteractiveCard } from '@/types/cards';
 
 // Shared storage key - must match the one in home page
@@ -58,7 +52,7 @@ interface SharedHistorySession {
   citationsCount?: number;
 }
 
-export default function ResearchSessionPage() {
+function ResearchSessionContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -248,36 +242,6 @@ export default function ResearchSessionPage() {
     });
   }, [messages]);
   
-  // Build agent progress for timeline
-  const agentProgress = useMemo(() => {
-    if (agentSteps.length === 0) return null;
-    
-    return {
-      steps: agentSteps.map(step => ({
-        id: step.id,
-        name: step.name,
-        title: step.title,
-        status: step.status,
-        duration: step.duration,
-        summary: step.summary,
-        details: step.details,
-      })),
-      currentStepId: agentSteps.find(s => s.status === 'running')?.id,
-      isCollapsed: false,
-    };
-  }, [agentSteps]);
-  
-  // Get text content from user message
-  const getUserMessageText = (message: UIMessage): string => {
-    if (message.parts) {
-      const textParts = message.parts.filter(p => p.type === 'text');
-      if (textParts.length > 0) {
-        return textParts.map(p => (p as { text: string }).text).join(' ');
-      }
-    }
-    return '';
-  };
-  
   return (
     <div className="h-screen flex bg-background overflow-hidden">
       {/* Left History Sidebar */}
@@ -299,13 +263,18 @@ export default function ResearchSessionPage() {
       
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-background flex-shrink-0">
+        {/* Header - Refined */}
+        <header className={cn(
+          "h-14 flex items-center justify-between px-4",
+          "border-b border-border/40",
+          "bg-background/80 backdrop-blur-lg",
+          "flex-shrink-0"
+        )}>
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 rounded-xl hover:bg-muted/80"
               onClick={() => router.push('/')}
               title="返回主页面"
             >
@@ -315,7 +284,7 @@ export default function ResearchSessionPage() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 rounded-xl hover:bg-muted/80"
               onClick={() => setSidebarOpen(!sidebarOpen)}
             >
               {sidebarOpen ? (
@@ -325,16 +294,28 @@ export default function ResearchSessionPage() {
               )}
             </Button>
             
-            <h1 className="text-sm font-medium truncate max-w-[400px]">
+            <div className="h-5 w-px bg-border/50 mx-1" />
+            
+            <h1 className="text-sm font-medium text-foreground/80 truncate max-w-[400px]">
               {initialQuery || '新研究'}
             </h1>
           </div>
           
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 rounded-xl hover:bg-muted/80"
+              title="下载报告"
+            >
               <Download className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 rounded-xl hover:bg-muted/80"
+              title="设置"
+            >
               <Settings className="h-4 w-4" />
             </Button>
           </div>
@@ -363,42 +344,18 @@ export default function ResearchSessionPage() {
                   description="输入您的研究问题，AI 将帮助您深入分析"
                 />
               ) : (
-                <div className="space-y-4">
-                  {/* Agent Timeline - positioned at the top during research */}
-                  {agentProgress && agentProgress.steps.length > 0 && (
-                    <div className="mb-6">
-                      <AgentTimeline progress={agentProgress} mode="inline" />
-                    </div>
-                  )}
-                  
-                  {/* Messages */}
-                  {uniqueMessages.map((message: UIMessage) => (
-                    <div key={message.id}>
-                      {message.role === 'user' ? (
-                        // User message - right aligned with avatar
-                        <Message from="user">
-                          <MessageContent variant="contained">
-                            {getUserMessageText(message)}
-                          </MessageContent>
-                          <MessageAvatar name="You" />
-                        </Message>
-                      ) : (
-                        // Assistant message - full width, no avatar
-                        <Message from="assistant">
-                          <MessageContent variant="plain">
-                            <MessagePartsRenderer
-                              message={message}
-                              onCardClick={handleCardClick}
-                              onCheckpointAction={handleCheckpointAction}
-                            />
-                          </MessageContent>
-                        </Message>
-                      )}
-                    </div>
-                  ))}
+                <>
+                  {/* Unified Research Stream */}
+                  <ResearchStream
+                    messages={uniqueMessages}
+                    cards={cards}
+                    currentCheckpoint={currentCheckpoint}
+                    onCardClick={handleCardClick}
+                    onCheckpointAction={handleCheckpointAction}
+                  />
                   
                   {/* Loading state with context */}
-                  {status === 'submitted' && (
+                  {status === 'submitted' && agentSteps.length === 0 && (
                     <div className="py-4">
                       <Loader 
                         context={
@@ -411,7 +368,7 @@ export default function ResearchSessionPage() {
                       />
                     </div>
                   )}
-                </div>
+                </>
               )}
               
               {/* Initial loading state */}
@@ -441,11 +398,11 @@ export default function ResearchSessionPage() {
               />
             )}
             
-            {/* Input Area */}
-            <div className="p-4 border-t border-border bg-background/95 backdrop-blur">
+            {/* Input Area - Floating Capsule */}
+            <div className="p-4 pb-6">
               {/* Task progress - above input */}
               {taskProgress.todos.length > 0 && (
-                <div className="mb-3">
+                <div className="mb-4 max-w-3xl mx-auto">
                   <TodoProgress taskProgress={taskProgress} />
                 </div>
               )}
@@ -454,6 +411,7 @@ export default function ResearchSessionPage() {
                 onSubmit={handleSubmit}
                 isSubmitting={status === 'streaming' || status === 'submitted'}
                 isDisabled={inputDisabled}
+                variant="floating"
               >
                 <PromptInputTextarea
                   value={inputValue}
@@ -463,20 +421,26 @@ export default function ResearchSessionPage() {
                       ? '研究进行中，点击停止按钮暂停...'
                       : currentCheckpoint
                       ? '输入反馈或选择上方操作继续...'
-                      : '输入研究问题...'
+                      : '输入您的研究问题...'
                   }
                 />
                 <PromptInputFooter>
                   <div className="flex items-center gap-2">
                     {/* Status indicator */}
                     {isActive && (
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                        </span>
                         研究中
                       </span>
                     )}
                     {isComplete && (
-                      <span className="text-xs text-primary font-medium">
+                      <span className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                        <span className="w-2 h-2 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="w-1 h-1 rounded-full bg-primary" />
+                        </span>
                         研究完成
                       </span>
                     )}
@@ -488,7 +452,7 @@ export default function ResearchSessionPage() {
                         size="sm"
                         variant="outline"
                         onClick={stopResearch}
-                        className="h-8 px-3"
+                        className="h-8 px-3 rounded-xl"
                       >
                         <Square className="h-3 w-3 mr-1.5" />
                         停止
@@ -512,5 +476,24 @@ export default function ResearchSessionPage() {
         onSave={handleSidePanelSave}
       />
     </div>
+  );
+}
+
+/**
+ * Page component with Suspense boundary for useSearchParams
+ * Required for Next.js 16+ to properly handle client-side navigation hooks
+ */
+export default function ResearchSessionPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">正在加载研究...</p>
+        </div>
+      </div>
+    }>
+      <ResearchSessionContent />
+    </Suspense>
   );
 }

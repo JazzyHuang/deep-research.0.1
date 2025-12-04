@@ -1,6 +1,6 @@
 import { coordinateResearch, serializeStreamEvent } from '@/lib/agents';
 
-export const maxDuration = 300; // 5 minutes max for deep research
+export const maxDuration = 600; // 10 minutes max for deep research (SOTA requirement)
 
 export async function POST(req: Request) {
   try {

@@ -15,6 +15,7 @@ import {
   BarChart3,
   PenLine,
   Zap,
+  CircleDot,
 } from 'lucide-react';
 import type { AgentProgress, AgentStep, StepStatus } from '@/types/conversation';
 import { cn } from '@/lib/utils';
@@ -26,7 +27,7 @@ interface AgentTimelineProps {
   mode?: 'inline' | 'compact';
 }
 
-// Step type icons
+// Step type icons with consistent sizing
 const STEP_ICONS: Record<string, React.ReactNode> = {
   thinking: <Brain className="w-3.5 h-3.5" />,
   planning: <Brain className="w-3.5 h-3.5" />,
@@ -58,13 +59,13 @@ function getStepIcon(stepName: string): React.ReactNode {
 }
 
 /**
- * AgentTimeline - Redesigned vertical execution timeline
+ * AgentTimeline - Modern vertical execution timeline
  * 
  * Features:
- * - Clean vertical timeline with animated transitions
- * - Collapsible with smart auto-expand for running steps
- * - Shows current step prominently
- * - Smooth animations for step status changes
+ * - Glassmorphism design with smooth animations
+ * - Connected step visualization with gradient lines
+ * - Smart auto-expand for running steps
+ * - Refined typography and spacing
  */
 export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTimelineProps) {
   const [isCollapsed, setIsCollapsed] = useState(progress.isCollapsed);
@@ -79,27 +80,37 @@ export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTim
     if (runningSteps.length > 0 && isCollapsed) {
       setIsCollapsed(false);
     }
-  }, [runningSteps.length]);
+  }, [runningSteps.length, isCollapsed]);
   
-  // Compact mode - single line summary
+  // Compact mode - minimal pill summary
   if (mode === 'compact') {
     return (
-      <div className={cn("flex items-center gap-2 text-sm", className)}>
+      <div className={cn(
+        "inline-flex items-center gap-2.5 px-3 py-1.5 rounded-full",
+        "bg-muted/30 border border-border/50",
+        "text-sm",
+        className
+      )}>
         {runningSteps.length > 0 ? (
           <>
-            <Loader2 className="w-4 h-4 text-primary animate-spin" />
-            <span className="text-foreground">{runningSteps[0].title}</span>
+            <div className="relative">
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+            </div>
+            <span className="text-foreground font-medium">{runningSteps[0].title}</span>
           </>
         ) : hasError ? (
           <>
             <AlertCircle className="w-4 h-4 text-destructive" />
-            <span className="text-destructive">执行出错</span>
+            <span className="text-destructive font-medium">执行出错</span>
           </>
         ) : (
           <>
-            <Check className="w-4 h-4 text-primary" />
+            <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center">
+              <Check className="w-2.5 h-2.5 text-primary" />
+            </div>
             <span className="text-muted-foreground">
-              已完成 {completedSteps.length} 个步骤
+              {completedSteps.length} 步骤完成
             </span>
           </>
         )}
@@ -109,7 +120,9 @@ export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTim
   
   return (
     <div className={cn(
-      "rounded-xl border border-border/50 bg-card/50 overflow-hidden",
+      "rounded-2xl overflow-hidden",
+      "border border-border/40",
+      "bg-card/50 backdrop-blur-sm",
       "timeline-enter",
       className
     )}>
@@ -117,39 +130,52 @@ export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTim
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className={cn(
-          "w-full flex items-center gap-3 px-4 py-3",
-          "hover:bg-muted/30 transition-colors"
+          "w-full flex items-center gap-3 px-4 py-3.5",
+          "hover:bg-muted/30 transition-all duration-200"
         )}
       >
         {/* Expand/Collapse icon */}
-        <div className="text-muted-foreground/60">
-          {isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+        <div className={cn(
+          "transition-transform duration-300",
+          !isCollapsed && "rotate-90"
+        )}>
+          <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
         </div>
         
         {/* Status indicator */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           {runningSteps.length > 0 ? (
             <>
-              <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
-              <span className="text-sm font-medium text-foreground truncate">
-                {runningSteps[0].title}
-              </span>
+              <div className="relative flex-shrink-0">
+                <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                </div>
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary animate-ping" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-medium text-foreground truncate block">
+                  {runningSteps[0].title}
+                </span>
+                {runningSteps.length > 1 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    +{runningSteps.length - 1} 并行
+                  </span>
+                )}
+              </div>
             </>
           ) : hasError ? (
             <>
-              <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+              <div className="w-6 h-6 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-3.5 h-3.5 text-destructive" />
+              </div>
               <span className="text-sm font-medium text-destructive">
                 执行出错
               </span>
             </>
           ) : (
             <>
-              <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                <Check className="w-3 h-3 text-primary" />
+              <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Check className="w-3.5 h-3.5 text-primary" />
               </div>
               <span className="text-sm text-muted-foreground">
                 已完成 {completedSteps.length} 个步骤
@@ -159,14 +185,14 @@ export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTim
         </div>
         
         {/* Progress and duration */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground/60 flex-shrink-0">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground/60 flex-shrink-0">
           {totalDuration > 0 && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/30">
               <Clock className="w-3 h-3" />
               {formatDuration(totalDuration)}
             </span>
           )}
-          <span className="tabular-nums px-1.5 py-0.5 rounded bg-muted/50">
+          <span className="tabular-nums px-2 py-0.5 rounded-md bg-muted/50 font-medium">
             {completedSteps.length}/{progress.steps.length}
           </span>
         </div>
@@ -175,11 +201,12 @@ export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTim
       {/* Expanded Timeline */}
       {!isCollapsed && (
         <div className="px-4 pb-4 pt-1 animate-collapsible-down">
-          <div className="timeline-vertical">
+          <div className="timeline-vertical pl-2">
             {progress.steps.map((step, index) => (
               <TimelineStep
                 key={step.id}
                 step={step}
+                index={index}
                 isLast={index === progress.steps.length - 1}
               />
             ))}
@@ -192,119 +219,137 @@ export function AgentTimeline({ progress, className, mode = 'inline' }: AgentTim
 
 interface TimelineStepProps {
   step: AgentStep;
+  index: number;
   isLast: boolean;
 }
 
 /**
  * TimelineStep - Individual step on the vertical timeline
+ * Redesigned with gradient lines and refined animations
  */
-function TimelineStep({ step, isLast }: TimelineStepProps) {
+function TimelineStep({ step, index, isLast }: TimelineStepProps) {
   const [expanded, setExpanded] = useState(false);
   const hasChildren = step.children && step.children.length > 0;
   const hasDetails = step.summary || hasChildren;
   
   return (
-    <div className={cn(
-      "timeline-step relative pl-7",
-      !isLast && "pb-4"
-    )}>
-      {/* Vertical line */}
+    <div 
+      className={cn(
+        "timeline-step relative pl-8",
+        !isLast && "pb-5"
+      )}
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      {/* Vertical connector line */}
       {!isLast && (
         <div className={cn(
-          "absolute left-[7px] top-5 bottom-0 w-0.5 rounded-full",
-          step.status === 'success' ? "bg-primary/30" : "bg-border"
+          "absolute left-[9px] top-6 bottom-0 w-0.5 rounded-full",
+          "transition-all duration-500",
+          step.status === 'success' 
+            ? "bg-gradient-to-b from-primary/60 to-primary/20" 
+            : "bg-border/50"
         )} />
       )}
       
-      {/* Step dot/icon */}
+      {/* Step dot */}
       <div className={cn(
-        "absolute left-0 w-4 h-4 rounded-full flex items-center justify-center",
-        "border-2 bg-background transition-all duration-300",
-        step.status === 'running' && "border-primary step-dot-pulse",
-        step.status === 'success' && "border-primary bg-primary",
-        step.status === 'error' && "border-destructive bg-destructive/10",
-        step.status === 'pending' && "border-muted-foreground/30",
-        step.status === 'skipped' && "border-muted-foreground/20 bg-muted"
+        "absolute left-0 w-5 h-5 rounded-full flex items-center justify-center",
+        "transition-all duration-300",
+        step.status === 'running' && [
+          "bg-primary/10 border-2 border-primary",
+          "step-dot-pulse"
+        ],
+        step.status === 'success' && "bg-primary border-2 border-primary",
+        step.status === 'error' && "bg-destructive/10 border-2 border-destructive",
+        step.status === 'pending' && "bg-muted border-2 border-muted-foreground/20",
+        step.status === 'skipped' && "bg-muted/50 border-2 border-muted-foreground/10"
       )}>
         {step.status === 'running' ? (
           <Loader2 className="w-2.5 h-2.5 animate-spin text-primary" />
         ) : step.status === 'success' ? (
-          <Check className="w-2.5 h-2.5 text-primary-foreground" />
+          <Check className="w-2.5 h-2.5 text-primary-foreground" strokeWidth={3} />
         ) : step.status === 'error' ? (
           <AlertCircle className="w-2.5 h-2.5 text-destructive" />
+        ) : step.status === 'pending' ? (
+          <CircleDot className="w-2.5 h-2.5 text-muted-foreground/40" />
         ) : null}
       </div>
       
       {/* Step content */}
       <div 
         className={cn(
-          "min-h-[20px]",
+          "min-h-[20px] group",
           hasDetails && "cursor-pointer"
         )}
         onClick={() => hasDetails && setExpanded(!expanded)}
       >
         {/* Step header */}
         <div className="flex items-center gap-2">
-          {/* Expand indicator */}
-          {hasDetails && (
-            <div className="text-muted-foreground/40">
-              {expanded ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
-            </div>
-          )}
-          
           {/* Step icon */}
           <div className={cn(
-            "flex-shrink-0",
-            step.status === 'running' && "text-primary",
-            step.status === 'success' && "text-primary/60",
-            step.status === 'error' && "text-destructive",
-            step.status === 'pending' && "text-muted-foreground/40",
-            step.status === 'skipped' && "text-muted-foreground/30"
+            "flex-shrink-0 p-1 rounded-md transition-colors",
+            step.status === 'running' && "text-primary bg-primary/5",
+            step.status === 'success' && "text-primary/50",
+            step.status === 'error' && "text-destructive bg-destructive/5",
+            step.status === 'pending' && "text-muted-foreground/30",
+            step.status === 'skipped' && "text-muted-foreground/20"
           )}>
             {getStepIcon(step.name)}
           </div>
           
           {/* Step title */}
           <span className={cn(
-            "text-sm flex-1",
+            "text-sm flex-1 transition-colors",
             step.status === 'running' && "text-foreground font-medium",
-            step.status === 'success' && "text-muted-foreground",
-            step.status === 'error' && "text-destructive",
+            step.status === 'success' && "text-foreground/70",
+            step.status === 'error' && "text-destructive font-medium",
             step.status === 'pending' && "text-muted-foreground/50",
             step.status === 'skipped' && "text-muted-foreground/40 line-through"
           )}>
             {step.title}
           </span>
           
-          {/* Duration */}
+          {/* Duration badge */}
           {step.duration !== undefined && step.duration > 0 && (
-            <span className="text-[10px] text-muted-foreground/40 tabular-nums flex-shrink-0">
+            <span className={cn(
+              "text-[10px] tabular-nums flex-shrink-0",
+              "px-1.5 py-0.5 rounded-md",
+              "bg-muted/50 text-muted-foreground/50"
+            )}>
               {formatDuration(step.duration)}
             </span>
+          )}
+          
+          {/* Expand indicator */}
+          {hasDetails && (
+            <div className={cn(
+              "transition-all duration-200",
+              "text-muted-foreground/30 group-hover:text-muted-foreground/60",
+              expanded && "rotate-90"
+            )}>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
           )}
         </div>
         
         {/* Expanded details */}
         {expanded && (
-          <div className="mt-2 ml-5 space-y-2 animate-collapsible-down">
+          <div className="mt-3 ml-7 space-y-3 animate-collapsible-down">
             {/* Summary */}
             {step.summary && (
-              <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              <p className="text-xs text-muted-foreground/60 leading-relaxed pl-1 border-l-2 border-border/50">
                 {step.summary}
               </p>
             )}
             
             {/* Children steps (nested timeline) */}
             {hasChildren && (
-              <div className="timeline-vertical mt-2">
+              <div className="timeline-vertical">
                 {step.children!.map((child, i) => (
                   <TimelineStep
                     key={child.id}
                     step={child}
+                    index={i}
                     isLast={i === step.children!.length - 1}
                   />
                 ))}

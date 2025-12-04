@@ -13,3 +13,11 @@ export {
   EmptyHistoryState,
   type HistorySession 
 } from './home-history-section';
+
+// New visual components
+export { CitationHoverCard, InlineCitationGroup } from './citation-hover-card';
+export { 
+  QualityMetricsCard, 
+  RadialProgress, 
+  MiniQualityBadge 
+} from './quality-metrics-card';

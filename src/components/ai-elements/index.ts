@@ -30,6 +30,7 @@ export {
   PromptInputSubmit,
   PromptInputButton,
   PromptInputFooter,
+  PromptInputActions,
 } from './prompt-input';
 
 // Reasoning

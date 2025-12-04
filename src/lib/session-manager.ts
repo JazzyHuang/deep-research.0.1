@@ -500,8 +500,22 @@ class SessionManager {
   }
 }
 
-// Export singleton instance
-export const sessionManager = new SessionManager();
+// Global singleton pattern for Next.js
+// This ensures the same instance is used across all API routes
+// even when modules are re-evaluated by Turbopack/Webpack
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __sessionManager: SessionManager | undefined;
+}
+
+// Export singleton instance using global to persist across module reloads
+export const sessionManager: SessionManager = globalThis.__sessionManager ?? new SessionManager();
+
+// Store in global for persistence in development
+if (process.env.NODE_ENV !== 'production') {
+  globalThis.__sessionManager = sessionManager;
+}
 
 // Export type
 export type { SessionManager };

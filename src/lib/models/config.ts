@@ -3,16 +3,102 @@
  * 
  * Model Strategy:
  * - Grok 4.1 Fast: Search + tool scheduling brain (2M context, fast reasoning)
- * - Gemini 2.5 Flash: Final writing & serious reasoning (with thinking mode)
+ * - Gemini 2.5 Flash: Final writing & serious reasoning
  * - Gemini 2.5 Flash-Lite: Bulk/repetitive medium-light tasks (high throughput)
+ * 
+ * Note: Gemini 2.5 Flash has thinking mode enabled by default.
+ * We explicitly disable it via extraBody to prevent stream interruptions
+ * and ensure compatibility with OpenRouter.
  */
 
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
-// Initialize OpenRouter provider
+/**
+ * Timeout configurations for different operation types
+ * 
+ * Note: LONG_GENERATION should match Next.js maxDuration (600s = 10 minutes)
+ * to prevent premature stream termination during report generation.
+ */
+export const TIMEOUTS = {
+  /** Standard API calls (30 seconds) */
+  STANDARD: 30 * 1000,
+  /** Long generation tasks like report writing (10 minutes) 
+   * Must match Next.js maxDuration to prevent ERR_INCOMPLETE_CHUNKED_ENCODING */
+  LONG_GENERATION: 10 * 60 * 1000,
+  /** Maximum allowed timeout (10 minutes) */
+  MAX: 10 * 60 * 1000,
+} as const;
+
+/**
+ * Maximum output token configurations for different tasks
+ * Note: AI SDK v5 uses maxOutputTokens instead of maxTokens
+ */
+export const MAX_OUTPUT_TOKENS = {
+  /** Report generation - needs large output */
+  REPORT: 8192,
+  /** Standard analysis tasks */
+  ANALYSIS: 4096,
+  /** Summary and lightweight tasks */
+  SUMMARY: 2048,
+} as const;
+
+/**
+ * Custom fetch with timeout support for OpenRouter calls
+ */
+function createFetchWithTimeout(timeoutMs: number = TIMEOUTS.LONG_GENERATION) {
+  return async (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      return response;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+}
+
+/**
+ * Extra body configuration to disable Gemini thinking mode
+ * Gemini 2.5 Flash has thinking enabled by default which can cause:
+ * - Stream interruptions during long generations
+ * - Compatibility issues with OpenRouter
+ * Setting thinking_budget to 0 disables thinking mode
+ */
+const GEMINI_NO_THINKING_CONFIG = {
+  generation_config: {
+    thinking_config: {
+      thinking_budget: 0,
+    },
+  },
+};
+
+// Initialize OpenRouter provider with extended timeout for long generations
 export const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
+  // Use custom fetch with extended timeout for long-running generations
+  fetch: createFetchWithTimeout(TIMEOUTS.LONG_GENERATION),
+  // Disable Gemini thinking mode to prevent stream interruptions
+  extraBody: GEMINI_NO_THINKING_CONFIG,
 });
+
+/**
+ * Create an OpenRouter instance with a specific timeout
+ * Useful for operations that need different timeout values
+ * Includes Gemini thinking mode disabled by default
+ */
+export function createOpenRouterWithTimeout(timeoutMs: number) {
+  return createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    fetch: createFetchWithTimeout(timeoutMs),
+    // Disable Gemini thinking mode to prevent stream interruptions
+    extraBody: GEMINI_NO_THINKING_CONFIG,
+  });
+}
 
 /**
  * Model identifiers for OpenRouter
@@ -26,7 +112,7 @@ export const MODELS = {
   },
   
   // Gemini 2.5 Flash - Final Writing & Serious Reasoning
-  // Used for report generation and critical analysis with deep thinking
+  // Used for report generation and critical analysis (thinking mode disabled)
   WRITER: 'google/gemini-2.5-flash',
   
   // Gemini 2.5 Flash-Lite - Bulk/Repetitive Tasks
@@ -42,53 +128,48 @@ export type WriterModel = typeof MODELS.WRITER;
 export type LightweightModel = typeof MODELS.LIGHTWEIGHT;
 
 /**
- * Thinking mode configuration for Gemini models
- * Higher budget = deeper reasoning but slower response
+ * Thinking mode configuration interface
+ * Used to configure Gemini's thinking budget via extraBody
  */
 export interface ThinkingConfig {
-  thinkingBudget: number; // Token budget for thinking (0 to disable, max ~24576)
+  thinkingBudget: number;
 }
 
 /**
- * Default thinking budgets for different task types
+ * Thinking budgets for Gemini models
+ * Note: We use 0 (disabled) by default via GEMINI_NO_THINKING_CONFIG
+ * to prevent stream interruptions with OpenRouter
  */
 export const THINKING_BUDGETS = {
-  // Deep analysis tasks (report writing, critical analysis)
-  DEEP: 8192,
-  // Standard reasoning tasks
-  STANDARD: 4096,
-  // Light reasoning (not typically used with thinking mode)
+  DISABLED: 0,
   LIGHT: 2048,
-} as const;
+  STANDARD: 4096,
+  DEEP: 8192,
+};
+
+export type ThinkingBudget = (typeof THINKING_BUDGETS)[keyof typeof THINKING_BUDGETS];
 
 /**
- * Get model configuration with optional thinking mode
+ * Get model configuration
  * 
- * @param modelId - The OpenRouter model identifier
- * @param enableThinking - Whether to enable thinking mode (Gemini 2.5 Flash only)
- * @param thinkingBudget - Token budget for thinking (default: THINKING_BUDGETS.DEEP)
- * @returns Model configuration object for Vercel AI SDK
+ * Note: Thinking mode is now disabled globally via extraBody in the OpenRouter config.
+ * This function is kept for API compatibility but returns empty config.
+ * 
+ * @param _modelId - The OpenRouter model identifier (unused)
+ * @param _enableThinking - Whether thinking was requested (unused, thinking is disabled globally)
+ * @param _thinkingBudget - Token budget (unused)
+ * @returns Empty configuration object
  */
 export function getModelConfig(
-  modelId: string,
-  enableThinking = false,
-  thinkingBudget = THINKING_BUDGETS.DEEP
-) {
-  // Only Gemini 2.5 Flash supports thinking mode (not Flash-Lite)
-  const supportsThinking = modelId === MODELS.WRITER;
-  
-  if (enableThinking && supportsThinking) {
-    return {
-      providerOptions: {
-        google: {
-          thinkingConfig: {
-            thinkingBudget,
-          },
-        },
-      },
-    };
+  _modelId: string,
+  _enableThinking = false,
+  _thinkingBudget: number = THINKING_BUDGETS.DISABLED
+): Record<string, unknown> {
+  // Thinking mode is disabled globally via GEMINI_NO_THINKING_CONFIG
+  // Return empty config as thinking settings are handled at provider level
+  if (_enableThinking && process.env.NODE_ENV === 'development') {
+    console.log('[Model] Note: Thinking mode is disabled globally to prevent stream interruptions');
   }
-  
   return {};
 }
 
@@ -111,9 +192,11 @@ export function getModelForTask(task: 'orchestration' | 'writing' | 'analysis' |
 
 /**
  * Check if a model supports thinking mode
+ * Note: Returns false since thinking mode is disabled globally to prevent stream interruptions
  */
-export function supportsThinkingMode(modelId: string): boolean {
-  return modelId === MODELS.WRITER;
+export function supportsThinkingMode(_modelId: string): boolean {
+  // Thinking mode is disabled globally via GEMINI_NO_THINKING_CONFIG
+  return false;
 }
 
 /**

@@ -5,13 +5,12 @@ import { BaseCard } from '@/components/cards';
 import type { 
   ResearchDataParts,
   InteractiveCard,
-  CheckpointData,
   LogLineData,
   SummaryBlockData,
 } from '@/types/ui-message';
 import { 
   Search, Filter, FileText, PenTool, Check, Info, 
-  AlertTriangle, Database, ChevronRight, AlertCircle,
+  AlertTriangle, Database, ChevronRight,
   CircleDot
 } from 'lucide-react';
 
@@ -82,102 +81,6 @@ function SummaryRenderer({ data }: { data: SummaryBlockData }) {
   );
 }
 
-/**
- * CheckpointRenderer - Redesigned for prominence
- * 
- * Features:
- * - Full-width design with clear visual separation
- * - Pulsing border animation to draw attention
- * - Improved button styling with hover effects
- */
-function CheckpointRenderer({ 
-  data, 
-  onAction 
-}: { 
-  data: CheckpointData;
-  onAction?: (action: string) => void;
-}) {
-  if (data.resolvedAt) {
-    // Already resolved - show minimal indicator
-    return (
-      <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground/70">
-        <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
-          <Check className="w-3 h-3 text-green-500" />
-        </div>
-        <span>{data.title}</span>
-        <span className="text-muted-foreground/50">· {data.resolution || '已确认'}</span>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="checkpoint-container my-4 animate-in slide-in-from-bottom-2 duration-300">
-      {/* Checkpoint card with prominent styling */}
-      <div className={cn(
-        "relative rounded-xl border-2 border-amber-500/60 bg-card overflow-hidden",
-        "shadow-lg shadow-amber-500/10",
-        "checkpoint-pulse-border"
-      )}>
-        {/* Top accent bar */}
-        <div className="h-1 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400" />
-        
-        {/* Content */}
-        <div className="p-5">
-          {/* Header */}
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-amber-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-semibold text-foreground">
-                {data.title}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                {data.description}
-              </p>
-            </div>
-          </div>
-          
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-3">
-            {data.options.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => onAction?.(option.action)}
-                className={cn(
-                  "flex-1 min-w-[120px] px-4 py-2.5 rounded-lg text-sm font-medium",
-                  "transition-all duration-200",
-                  "hover:scale-[1.02] active:scale-[0.98]",
-                  option.variant === 'primary' && [
-                    "bg-amber-500 text-white",
-                    "hover:bg-amber-600",
-                    "shadow-sm shadow-amber-500/30"
-                  ],
-                  option.variant === 'secondary' && [
-                    "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                    "hover:bg-amber-500/20"
-                  ],
-                  option.variant === 'outline' && [
-                    "border border-border bg-background",
-                    "hover:bg-muted"
-                  ]
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          
-          {/* Help text */}
-          <p className="mt-4 text-xs text-muted-foreground/60 text-center">
-            请选择操作以继续研究流程
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function CardRenderer({ 
   type, 
   id, 
@@ -204,7 +107,7 @@ function CardRenderer({
   };
   
   return (
-    <div className="py-2">
+    <div className="stream-card py-3">
       <BaseCard
         card={card}
         onTitleClick={() => onCardClick?.(id)}
@@ -271,19 +174,10 @@ export function DataPart({
       }
       return null;
     
-    // Checkpoint
+    // Checkpoint - handled at card level in ResearchStream
     case 'data-checkpoint':
-      return (
-        <div className={className}>
-          <CheckpointRenderer 
-            data={data as CheckpointData}
-            onAction={(action) => {
-              const checkpoint = data as CheckpointData;
-              onCheckpointAction?.(checkpoint.id, action);
-            }}
-          />
-        </div>
-      );
+      // Checkpoints are now embedded as actions in their associated cards
+      return null;
     
     // Agent steps - rendered by AgentTimeline, not individually
     case 'data-agent-step':

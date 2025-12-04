@@ -5,15 +5,18 @@
  * 
  * Model Strategy:
  * - Grok 4.1 Fast: Orchestration, planning, search coordination (2M context)
- * - Gemini 2.5 Flash: Report writing, critical analysis (with thinking mode)
+ * - Gemini 2.5 Flash: Report writing, critical analysis (thinking mode disabled)
  * - Gemini 2.5 Flash-Lite: Bulk extraction, validation, simple tasks
  */
 
 // Core configuration
 export {
   openrouter,
+  createOpenRouterWithTimeout,
   MODELS,
   THINKING_BUDGETS,
+  TIMEOUTS,
+  MAX_OUTPUT_TOKENS,
   getModelConfig,
   getModelForTask,
   supportsThinkingMode,
@@ -29,5 +32,10 @@ export {
   withGrokFallback,
   withRetry,
   withGrokFallbackAndRetry,
+  withStreamRetry,
+  wrapStreamWithErrorHandling,
+  recommendModelDowngrade,
+  type StreamRetryConfig,
+  type StreamRetryResult,
 } from './with-fallback';
 

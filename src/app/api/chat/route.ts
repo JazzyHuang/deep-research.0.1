@@ -21,7 +21,7 @@ import { sessionManager } from '@/lib/session-manager';
 import type { ResearchUIMessage, ResearchDataParts } from '@/types/ui-message';
 import type { Paper } from '@/types/paper';
 
-export const maxDuration = 300; // 5 minutes max
+export const maxDuration = 600; // 10 minutes max for deep research (SOTA requirement)
 
 // Checkpoint timeout: 5 minutes (auto-approve if no response)
 const CHECKPOINT_TIMEOUT = 5 * 60 * 1000;
@@ -83,6 +83,30 @@ export async function POST(req: Request) {
         let stepCounter = 0;
         const searchStepIds = new Map<number, string>();
         let currentPapers: Paper[] = [];
+        
+        // Heartbeat mechanism to keep connection alive during long operations
+        // Sends a transient notification every 30 seconds to prevent proxy/load balancer timeouts
+        let lastActivity = Date.now();
+        const HEARTBEAT_INTERVAL = 30 * 1000; // 30 seconds
+        
+        const heartbeatInterval = setInterval(() => {
+          const timeSinceActivity = Date.now() - lastActivity;
+          if (timeSinceActivity > HEARTBEAT_INTERVAL) {
+            try {
+              writer.write({
+                type: 'data-notification',
+                data: { message: '研究进行中...', level: 'info' },
+                transient: true,
+              });
+              lastActivity = Date.now();
+            } catch {
+              // Writer might be closed, ignore
+            }
+          }
+        }, HEARTBEAT_INTERVAL);
+        
+        // Helper to update activity timestamp
+        const updateActivity = () => { lastActivity = Date.now(); };
 
         // Helper to create unique IDs
         const createStepId = (prefix: string) => `${prefix}-${Date.now()}-${stepCounter++}`;
@@ -508,14 +532,29 @@ export async function POST(req: Request) {
           }
         } catch (error) {
           let errorMessage: string;
+          let isRecoverable = false;
+          
           if (error instanceof Error) {
             const msg = error.message.toLowerCase();
-            if (msg.includes('terminated') || msg.includes('aborted')) {
-              errorMessage = '研究过程被中断，请刷新页面重新开始';
-            } else if (msg.includes('timeout')) {
-              errorMessage = '请求超时，请稍后重试';
-            } else if (msg.includes('api key') || msg.includes('unauthorized')) {
-              errorMessage = 'API 配置错误，请联系管理员';
+            
+            // Detailed error classification for better user feedback
+            if (msg.includes('terminated') || msg.includes('aborted') || msg.includes('the operation was aborted')) {
+              // Stream was aborted - likely timeout
+              errorMessage = '研究过程被中断（可能是超时），请刷新页面重新开始';
+              console.error('[Chat API] Stream aborted:', error.message);
+            } else if (msg.includes('timeout') || msg.includes('timed out')) {
+              errorMessage = '请求超时，请稍后重试或简化研究问题';
+            } else if (msg.includes('api key') || msg.includes('unauthorized') || msg.includes('401')) {
+              errorMessage = 'API 配置错误，请检查 OPENROUTER_API_KEY';
+            } else if (msg.includes('rate limit') || msg.includes('429') || msg.includes('too many')) {
+              errorMessage = '请求过于频繁，请稍后重试';
+              isRecoverable = true;
+            } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('connection') || msg.includes('socket')) {
+              errorMessage = '网络连接失败，请检查网络后重试';
+              isRecoverable = true;
+            } else if (msg.includes('incomplete') || msg.includes('chunked')) {
+              errorMessage = '数据传输中断，请重试';
+              isRecoverable = true;
             } else {
               errorMessage = error.message;
             }
@@ -526,11 +565,20 @@ export async function POST(req: Request) {
           }
           
           sessionManager.setError(sessionId, errorMessage);
-          writer.write({
-            type: 'data-session-error',
-            data: { error: errorMessage },
-          });
+          
+          try {
+            writer.write({
+              type: 'data-session-error',
+              data: { error: errorMessage, recoverable: isRecoverable },
+            });
+          } catch {
+            // Writer might already be closed
+            console.error('[Chat API] Failed to write error to stream');
+          }
         } finally {
+          // Clear heartbeat interval
+          clearInterval(heartbeatInterval);
+          
           // Clean up session after a delay
           setTimeout(() => {
             sessionManager.remove(sessionId);

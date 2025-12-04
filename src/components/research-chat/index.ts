@@ -10,6 +10,7 @@ export { AssistantMessage } from './AssistantMessage';
 
 // Execution and progress components
 export { AgentTimeline } from './AgentTimeline';
+export { AgentStepInline, AgentStepsGroup } from './AgentStepInline';
 export { TodoProgress } from './TodoProgress';
 export { ThinkingBubble, ThinkingIndicator } from './ThinkingBubble';
 export { LogLine } from './LogLine';
@@ -18,6 +19,9 @@ export { SummaryBlock } from './SummaryBlock';
 // Progress UI components
 export { ProgressHeader, deriveStageFromSteps, type ResearchStage } from './ProgressHeader';
 export { FloatingProgress } from './FloatingProgress';
+
+// Stream renderer
+export { ResearchStream } from './ResearchStream';
 
 // Input components
 export { ChatInput } from './ChatInput';

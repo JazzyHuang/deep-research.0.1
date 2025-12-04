@@ -58,15 +58,18 @@ interface DataPartType {
 /**
  * MessagePartsRenderer - Renders all parts of a UIMessage
  * 
- * This component handles the AI SDK v5 message.parts array,
- * dispatching to appropriate part components based on type.
+ * Optimized for stream layout:
+ * - Text content renders without bubble (stream style)
+ * - Reasoning/thinking uses collapsible accordion
+ * - Cards render with bubble styling
+ * - Agent steps are filtered (rendered separately in AgentStepsBlock)
  * 
  * Supported part types:
- * - text: Regular text content
- * - reasoning: AI thinking/reasoning
+ * - text: Regular text content (no bubble)
+ * - reasoning: AI thinking/reasoning (collapsible)
  * - source-url: Citations and references
  * - tool-*: Tool calls and results
- * - data-*: Custom data parts (cards, checkpoints, etc.)
+ * - data-*: Custom data parts (cards with bubble, checkpoints, etc.)
  */
 export function MessagePartsRenderer({
   message,
@@ -81,7 +84,7 @@ export function MessagePartsRenderer({
   }
   
   return (
-    <div className="space-y-1">
+    <div className="stream-parts space-y-2">
       {parts.map((part, index) => {
         const key = `${message.id}-${index}`;
         
@@ -92,34 +95,37 @@ export function MessagePartsRenderer({
         if (partType === 'text') {
           const textPart = part as TextPartType;
           return (
-            <TextPart 
-              key={key} 
-              text={textPart.text} 
-              state={textPart.state}
-            />
+            <div key={key} className="stream-text-part">
+              <TextPart 
+                text={textPart.text} 
+                state={textPart.state}
+              />
+            </div>
           );
         }
         
         if (partType === 'reasoning') {
           const reasoningPart = part as ReasoningPartType;
           return (
-            <ReasoningPart
-              key={key}
-              text={reasoningPart.text}
-              state={reasoningPart.state}
-            />
+            <div key={key} className="stream-reasoning-part py-2">
+              <ReasoningPart
+                text={reasoningPart.text}
+                state={reasoningPart.state}
+              />
+            </div>
           );
         }
         
         if (partType === 'source-url') {
           const sourceUrlPart = part as SourceUrlPartType;
           return (
-            <SourcePart
-              key={key}
-              sourceId={sourceUrlPart.sourceId}
-              url={sourceUrlPart.url}
-              title={sourceUrlPart.title}
-            />
+            <div key={key} className="stream-source-part">
+              <SourcePart
+                sourceId={sourceUrlPart.sourceId}
+                url={sourceUrlPart.url}
+                title={sourceUrlPart.title}
+              />
+            </div>
           );
         }
         
@@ -127,14 +133,15 @@ export function MessagePartsRenderer({
         if (partType.startsWith('tool-')) {
           const toolPart = part as unknown as ToolPartType;
           return (
-            <ToolInvocationPart
-              key={key}
-              toolCallId={toolPart.toolCallId}
-              toolName={toolPart.toolName || partType.replace('tool-', '')}
-              args={toolPart.args || {}}
-              state={toolPart.state || 'call'}
-              result={toolPart.state === 'result' ? toolPart.result : undefined}
-            />
+            <div key={key} className="stream-tool-part py-1">
+              <ToolInvocationPart
+                toolCallId={toolPart.toolCallId}
+                toolName={toolPart.toolName || partType.replace('tool-', '')}
+                args={toolPart.args || {}}
+                state={toolPart.state || 'call'}
+                result={toolPart.state === 'result' ? toolPart.result : undefined}
+              />
+            </div>
           );
         }
         
@@ -144,18 +151,19 @@ export function MessagePartsRenderer({
           // Handle file attachments
           if (filePart.url && filePart.mediaType?.startsWith('image/')) {
             return (
-              <img
-                key={key}
-                src={filePart.url}
-                alt={filePart.filename || 'Attached image'}
-                className="max-w-full h-auto rounded-md"
-              />
+              <div key={key} className="stream-file-part py-2">
+                <img
+                  src={filePart.url}
+                  alt={filePart.filename || 'Attached image'}
+                  className="max-w-full h-auto rounded-xl border border-border/50"
+                />
+              </div>
             );
           }
           return null;
         }
         
-        // Custom data-* parts
+        // Custom data-* parts (cards, checkpoints, etc.)
         if (partType.startsWith('data-')) {
           const dataPart = part as DataPartType;
           return (
